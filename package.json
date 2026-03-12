@@ -1,0 +1,17 @@
+{
+  "name": "trusted-exam-micro-drills",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace @microdrills/api",
+    "dev:web": "npm run dev --workspace @microdrills/web",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

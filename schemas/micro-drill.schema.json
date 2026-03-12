@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://micro-drills.local/schemas/micro-drill.schema.json",
+  "title": "MicroDrillQuestion",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "brief",
+    "skill_tags",
+    "source_problem",
+    "difficulty",
+    "expected_time_seconds",
+    "input_example",
+    "expected_output",
+    "starter_code",
+    "answer_code",
+    "explanation",
+    "common_mistakes",
+    "related_functions",
+    "language",
+    "mode"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 120
+    },
+    "brief": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 300
+    },
+    "skill_tags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      }
+    },
+    "source_problem": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "来源长题 ID；独立模板题可填 standalone"
+    },
+    "difficulty": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "expected_time_seconds": {
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 600
+    },
+    "input_example": {
+      "type": "string",
+      "maxLength": 600
+    },
+    "expected_output": {
+      "type": "string",
+      "maxLength": 600
+    },
+    "starter_code": {
+      "type": "string"
+    },
+    "answer_code": {
+      "type": "string"
+    },
+    "explanation": {
+      "type": "string",
+      "maxLength": 1500
+    },
+    "common_mistakes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      }
+    },
+    "related_functions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64
+      }
+    },
+    "language": {
+      "type": "string",
+      "enum": ["C"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["micro", "decompose", "template"]
+    },
+    "step_order": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "仅 decompose 模式使用"
+    }
+  },
+  "additionalProperties": false
+}

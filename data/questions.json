@@ -1,0 +1,2295 @@
+[
+  {
+    "id": "md_vlan_extract_numbers",
+    "title": "提取 VLAN 命令中的数字",
+    "brief": "从字符串 \"port trunk allow-pass vlan 10 20 to 30\" 中提取整数数组。",
+    "skill_tags": [
+      "C接口",
+      "字符串处理",
+      "解析",
+      "数组"
+    ],
+    "source_problem": "vlan_cmd_transform",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "port trunk allow-pass vlan 10 20 to 30",
+    "expected_output": "[10,20,30]",
+    "starter_code": "int parse_vlan_ids(const char *line, int *out, int max_n) {\n    // TODO: 使用 strtok_s + strtol 提取所有数字\n    return 0;\n}",
+    "answer_code": "int parse_vlan_ids(const char *line, int *out, int max_n) {\n    char buf[256] = {0};\n    strncpy_s(buf, sizeof(buf), line, _TRUNCATE);\n    char *ctx = NULL;\n    char *tok = strtok_s(buf, \" \", &ctx);\n    int n = 0;\n    while (tok != NULL) {\n        char *end = NULL;\n        long v = strtol(tok, &end, 10);\n        if (end != tok && *end == '\\0' && n < max_n) {\n            out[n++] = (int)v;\n        }\n        tok = strtok_s(NULL, \" \", &ctx);\n    }\n    return n;\n}",
+    "explanation": "先按空格切词，再用 strtol 判断 token 是否是纯数字。",
+    "common_mistakes": [
+      "直接 atoi 无法识别非法 token",
+      "strtok_s 上下文指针复用错误"
+    ],
+    "related_functions": [
+      "strtok_s",
+      "strtol",
+      "strncpy_s"
+    ],
+    "language": "C",
+    "mode": "decompose",
+    "step_order": 1
+  },
+  {
+    "id": "md_vlan_parse_to_ranges",
+    "title": "识别 to 并展开区间",
+    "brief": "将 token 序列 [10,20,to,30,35] 解析为 VLAN 集合 10,20..30,35。",
+    "skill_tags": [
+      "C接口",
+      "字符串处理",
+      "区间",
+      "遍历"
+    ],
+    "source_problem": "vlan_cmd_transform",
+    "difficulty": 3,
+    "expected_time_seconds": 150,
+    "input_example": "tokens = [\"10\",\"20\",\"to\",\"30\",\"35\"]",
+    "expected_output": "[10,20,21,22,23,24,25,26,27,28,29,30,35]",
+    "starter_code": "int expand_tokens(char **tokens, int m, int *out, int max_n) {\n    // TODO: 识别 token==\"to\"，展开前后数字\n    return 0;\n}",
+    "answer_code": "int expand_tokens(char **tokens, int m, int *out, int max_n) {\n    int n = 0;\n    for (int i = 0; i < m; ++i) {\n        if (strcmp(tokens[i], \"to\") == 0 && i > 0 && i + 1 < m) {\n            int l = atoi(tokens[i - 1]);\n            int r = atoi(tokens[i + 1]);\n            for (int v = l + 1; v <= r && n < max_n; ++v) out[n++] = v;\n            continue;\n        }\n        if (i + 1 < m && strcmp(tokens[i + 1], \"to\") == 0) {\n            if (n < max_n) out[n++] = atoi(tokens[i]);\n            continue;\n        }\n        if (i > 0 && strcmp(tokens[i - 1], \"to\") == 0) continue;\n        if (n < max_n) out[n++] = atoi(tokens[i]);\n    }\n    return n;\n}",
+    "explanation": "遇到 to 时展开区间内部值，左右边界避免重复写入。",
+    "common_mistakes": [
+      "重复写入区间边界",
+      "i 越界访问 i-1 或 i+1"
+    ],
+    "related_functions": [
+      "strcmp",
+      "atoi"
+    ],
+    "language": "C",
+    "mode": "decompose",
+    "step_order": 2
+  },
+  {
+    "id": "md_vlan_merge_ranges",
+    "title": "离散 VLAN 合并连续区间",
+    "brief": "将已排序数组 [9,10,11,15,16,18] 合并为区间对 [(9,11),(15,16),(18,18)]。",
+    "skill_tags": [
+      "C接口",
+      "数组",
+      "区间合并",
+      "双指针"
+    ],
+    "source_problem": "vlan_cmd_transform",
+    "difficulty": 2,
+    "expected_time_seconds": 120,
+    "input_example": "[9,10,11,15,16,18]",
+    "expected_output": "[(9,11),(15,16),(18,18)]",
+    "starter_code": "int merge_ranges(const int *a, int n, int out[][2]) {\n    // TODO: 返回区间数量\n    return 0;\n}",
+    "answer_code": "int merge_ranges(const int *a, int n, int out[][2]) {\n    if (n <= 0) return 0;\n    int k = 0;\n    int l = a[0], r = a[0];\n    for (int i = 1; i < n; ++i) {\n        if (a[i] == r + 1) {\n            r = a[i];\n        } else {\n            out[k][0] = l;\n            out[k][1] = r;\n            ++k;\n            l = r = a[i];\n        }\n    }\n    out[k][0] = l;\n    out[k][1] = r;\n    return k + 1;\n}",
+    "explanation": "维护当前区间 [l,r]，遇到断点就落盘。",
+    "common_mistakes": [
+      "忘记处理最后一个区间",
+      "未假设输入已排序"
+    ],
+    "related_functions": [
+      "qsort"
+    ],
+    "language": "C",
+    "mode": "decompose",
+    "step_order": 3
+  },
+  {
+    "id": "md_vlan_format_output",
+    "title": "区间重新拼装命令字符串",
+    "brief": "把区间 [(9,11),(15,16),(18,18)] 拼成 \"port trunk allow-pass vlan 9 to 11 15 to 16 18\"。",
+    "skill_tags": [
+      "C接口",
+      "字符串处理",
+      "格式化输出"
+    ],
+    "source_problem": "vlan_cmd_transform",
+    "difficulty": 2,
+    "expected_time_seconds": 100,
+    "input_example": "[(9,11),(15,16),(18,18)]",
+    "expected_output": "port trunk allow-pass vlan 9 to 11 15 to 16 18",
+    "starter_code": "void build_cmd(int ranges[][2], int k, char *out, size_t cap) {\n    // TODO: 用 sprintf_s 拼接\n}",
+    "answer_code": "void build_cmd(int ranges[][2], int k, char *out, size_t cap) {\n    size_t used = 0;\n    int n = sprintf_s(out, cap, \"port trunk allow-pass vlan\");\n    if (n < 0) return;\n    used = (size_t)n;\n    for (int i = 0; i < k; ++i) {\n        if (ranges[i][0] == ranges[i][1]) {\n            n = sprintf_s(out + used, cap - used, \" %d\", ranges[i][0]);\n        } else {\n            n = sprintf_s(out + used, cap - used, \" %d to %d\", ranges[i][0], ranges[i][1]);\n        }\n        if (n < 0) return;\n        used += (size_t)n;\n    }\n}",
+    "explanation": "维护已写入长度 used，循环追加片段。",
+    "common_mistakes": [
+      "未检查缓冲区剩余空间",
+      "忘记单点区间与连续区间格式不同"
+    ],
+    "related_functions": [
+      "sprintf_s"
+    ],
+    "language": "C",
+    "mode": "decompose",
+    "step_order": 4
+  },
+  {
+    "id": "tpl_qsort_int_cmp",
+    "title": "qsort int 升序比较函数",
+    "brief": "补全 qsort 的 int 升序比较函数 cmp。",
+    "skill_tags": [
+      "C接口",
+      "比较函数",
+      "模板"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 45,
+    "input_example": "[5,1,9,2]",
+    "expected_output": "[1,2,5,9]",
+    "starter_code": "int cmp_int_asc(const void *a, const void *b) {\n    // TODO\n}\n\nqsort(arr, n, sizeof(arr[0]), cmp_int_asc);",
+    "answer_code": "int cmp_int_asc(const void *a, const void *b) {\n    int x = *(const int *)a;\n    int y = *(const int *)b;\n    return (x > y) - (x < y);\n}",
+    "explanation": "使用三值比较避免 x-y 溢出风险。",
+    "common_mistakes": [
+      "直接 return x - y 导致溢出",
+      "强转类型错误"
+    ],
+    "related_functions": [
+      "qsort"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "micro_bsearch_int",
+    "title": "bsearch 查找整数",
+    "brief": "在升序数组中用 bsearch 查找 target，找不到返回 -1。",
+    "skill_tags": [
+      "C接口",
+      "查找",
+      "数组"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 75,
+    "input_example": "arr=[1,4,7,9], target=7",
+    "expected_output": "index=2",
+    "starter_code": "int find_idx(const int *arr, int n, int target) {\n    // TODO: bsearch 返回元素指针后换算索引\n    return -1;\n}",
+    "answer_code": "static int cmp_key_int(const void *key, const void *elem) {\n    int k = *(const int *)key;\n    int e = *(const int *)elem;\n    return (k > e) - (k < e);\n}\n\nint find_idx(const int *arr, int n, int target) {\n    int *p = (int *)bsearch(&target, arr, (size_t)n, sizeof(int), cmp_key_int);\n    if (p == NULL) return -1;\n    return (int)(p - arr);\n}",
+    "explanation": "bsearch 返回命中元素地址，用指针差得到下标。",
+    "common_mistakes": [
+      "比较函数参数顺序写反",
+      "数组未排序就 bsearch"
+    ],
+    "related_functions": [
+      "bsearch"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "tpl_strtok_csv",
+    "title": "strtok_s 拆分 CSV",
+    "brief": "把 \"a,b,c\" 拆成 tokens 数组并返回数量。",
+    "skill_tags": [
+      "C接口",
+      "字符串处理",
+      "模板"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "a,b,c",
+    "expected_output": "[\"a\",\"b\",\"c\"]",
+    "starter_code": "int split_csv(char *line, char *out[], int max_n) {\n    // TODO\n    return 0;\n}",
+    "answer_code": "int split_csv(char *line, char *out[], int max_n) {\n    char *ctx = NULL;\n    char *tok = strtok_s(line, \",\", &ctx);\n    int n = 0;\n    while (tok != NULL && n < max_n) {\n        out[n++] = tok;\n        tok = strtok_s(NULL, \",\", &ctx);\n    }\n    return n;\n}",
+    "explanation": "首个调用传原字符串，后续传 NULL。",
+    "common_mistakes": [
+      "把字符串常量直接传给 strtok_s",
+      "上下文指针未声明"
+    ],
+    "related_functions": [
+      "strtok_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "tpl_sscanf_parse_pair",
+    "title": "sscanf_s 解析键值",
+    "brief": "从 \"id=17,mem=32\" 解析 id 和 mem。",
+    "skill_tags": [
+      "C接口",
+      "字符串处理",
+      "模板"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 40,
+    "input_example": "id=17,mem=32",
+    "expected_output": "id=17 mem=32",
+    "starter_code": "int id = 0, mem = 0;\n// TODO: sscanf_s",
+    "answer_code": "int id = 0, mem = 0;\nif (sscanf_s(line, \"id=%d,mem=%d\", &id, &mem) == 2) {\n    // parse ok\n}",
+    "explanation": "固定格式优先用 sscanf_s，返回值应为成功匹配字段数。",
+    "common_mistakes": [
+      "忽略 sscanf_s 返回值",
+      "格式串与实际输入不匹配"
+    ],
+    "related_functions": [
+      "sscanf_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "tpl_strtol_hex",
+    "title": "strtol 解析十六进制",
+    "brief": "把字符串 \"0x1f\" 转成十进制 31。",
+    "skill_tags": [
+      "C接口",
+      "进制转换",
+      "模板"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 35,
+    "input_example": "0x1f",
+    "expected_output": "31",
+    "starter_code": "long v = 0;\n// TODO: strtol",
+    "answer_code": "char *end = NULL;\nlong v = strtol(text, &end, 0);\nif (end == text || *end != '\\0') {\n    // invalid\n}",
+    "explanation": "base=0 可自动识别 0x 前缀，记得校验 end 指针。",
+    "common_mistakes": [
+      "忽略非法字符尾巴",
+      "把 base 固定写成 10"
+    ],
+    "related_functions": [
+      "strtol"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "tpl_sprintf_node",
+    "title": "sprintf_s 拼节点名",
+    "brief": "把 id=3 格式化为 \"node-03\"。",
+    "skill_tags": [
+      "C接口",
+      "格式化输出",
+      "模板"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 30,
+    "input_example": "id=3",
+    "expected_output": "node-03",
+    "starter_code": "char buf[32];\n// TODO",
+    "answer_code": "char buf[32] = {0};\nsprintf_s(buf, sizeof(buf), \"node-%02d\", id);",
+    "explanation": "`%02d` 可固定两位并补零。",
+    "common_mistakes": [
+      "使用 sprintf 不带长度",
+      "格式化占位符写错"
+    ],
+    "related_functions": [
+      "sprintf_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "tpl_dfs_preorder",
+    "title": "DFS 前序遍历模板",
+    "brief": "补全二叉树前序 DFS 模板（根-左-右）。",
+    "skill_tags": [
+      "DFS",
+      "树",
+      "递归"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 70,
+    "input_example": "root=[1,2,3,null,null,4,5]",
+    "expected_output": "[1,2,3,4,5]",
+    "starter_code": "typedef struct Node {\n    int val;\n    struct Node *left, *right;\n} Node;\n\nvoid dfs(Node *root, int *out, int *idx) {\n    // TODO\n}",
+    "answer_code": "void dfs(Node *root, int *out, int *idx) {\n    if (root == NULL) return;\n    out[(*idx)++] = root->val;\n    dfs(root->left, out, idx);\n    dfs(root->right, out, idx);\n}",
+    "explanation": "递归边界先判断空节点。",
+    "common_mistakes": [
+      "漏写空节点终止条件",
+      "左右子树顺序写反"
+    ],
+    "related_functions": [
+      "DFS"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "micro_bfs_shortest_path",
+    "title": "BFS 最短步数",
+    "brief": "在 0/1 网格中从 S 到 T，求最短步数（4 方向）。",
+    "skill_tags": [
+      "BFS",
+      "队列",
+      "图"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 180,
+    "input_example": "grid=[[S,0,1],[0,0,0],[1,0,T]]",
+    "expected_output": "4",
+    "starter_code": "int shortest_path(char grid[][64], int n, int m) {\n    // TODO: 队列 + visited\n    return -1;\n}",
+    "answer_code": "typedef struct { int x, y, d; } NodeQ;\n\nint shortest_path(char grid[][64], int n, int m) {\n    int qh = 0, qt = 0;\n    NodeQ q[4096];\n    int vis[64][64] = {0};\n    int sx = -1, sy = -1;\n    for (int i = 0; i < n; ++i) {\n        for (int j = 0; j < m; ++j) {\n            if (grid[i][j] == 'S') { sx = i; sy = j; }\n        }\n    }\n    q[qt++] = (NodeQ){sx, sy, 0};\n    vis[sx][sy] = 1;\n    int dx[4] = {1, -1, 0, 0};\n    int dy[4] = {0, 0, 1, -1};\n    while (qh < qt) {\n        NodeQ cur = q[qh++];\n        if (grid[cur.x][cur.y] == 'T') return cur.d;\n        for (int k = 0; k < 4; ++k) {\n            int nx = cur.x + dx[k], ny = cur.y + dy[k];\n            if (nx < 0 || nx >= n || ny < 0 || ny >= m) continue;\n            if (vis[nx][ny] || grid[nx][ny] == '1') continue;\n            vis[nx][ny] = 1;\n            q[qt++] = (NodeQ){nx, ny, cur.d + 1};\n        }\n    }\n    return -1;\n}",
+    "explanation": "BFS 层序扩展首次到达终点即最短。",
+    "common_mistakes": [
+      "入队时不标记 visited 导致重复入队",
+      "把障碍格也入队"
+    ],
+    "related_functions": [
+      "BFS"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_sliding_window_min_len",
+    "title": "滑窗最短子数组",
+    "brief": "数组中找和 >= target 的最短连续子数组长度。",
+    "skill_tags": [
+      "滑窗",
+      "数组",
+      "双指针"
+    ],
+    "source_problem": "log_traits",
+    "difficulty": 2,
+    "expected_time_seconds": 110,
+    "input_example": "nums=[2,3,1,2,4,3], target=7",
+    "expected_output": "2",
+    "starter_code": "int min_len(int *a, int n, int target) {\n    // TODO\n    return 0;\n}",
+    "answer_code": "int min_len(int *a, int n, int target) {\n    int l = 0, sum = 0, ans = n + 1;\n    for (int r = 0; r < n; ++r) {\n        sum += a[r];\n        while (sum >= target) {\n            int len = r - l + 1;\n            if (len < ans) ans = len;\n            sum -= a[l++];\n        }\n    }\n    return ans == n + 1 ? 0 : ans;\n}",
+    "explanation": "右指针扩张满足条件后，左指针收缩以最小化窗口。",
+    "common_mistakes": [
+      "sum 变量没有及时减去左边界",
+      "未处理无解返回 0"
+    ],
+    "related_functions": [
+      "滑窗"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_two_pointers_remove_dup",
+    "title": "双指针去重",
+    "brief": "有序数组原地去重，返回新长度。",
+    "skill_tags": [
+      "双指针",
+      "数组"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 60,
+    "input_example": "[1,1,2,2,3]",
+    "expected_output": "len=3, arr=[1,2,3]",
+    "starter_code": "int dedup(int *a, int n) {\n    // TODO\n    return 0;\n}",
+    "answer_code": "int dedup(int *a, int n) {\n    if (n == 0) return 0;\n    int slow = 1;\n    for (int fast = 1; fast < n; ++fast) {\n        if (a[fast] != a[fast - 1]) a[slow++] = a[fast];\n    }\n    return slow;\n}",
+    "explanation": "fast 扫描，slow 维护去重后写入位置。",
+    "common_mistakes": [
+      "未处理 n=0",
+      "比较条件写成 a[fast]!=a[slow]"
+    ],
+    "related_functions": [
+      "双指针"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_priority_machine_cmp",
+    "title": "三重优先级比较函数",
+    "brief": "比较物理机优先级：剩余内存大优先，部署数少优先，编号小优先。",
+    "skill_tags": [
+      "VOS接口",
+      "C接口",
+      "优先队列",
+      "比较函数",
+      "贪心"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 3,
+    "expected_time_seconds": 120,
+    "input_example": "A(left=64,vm=2,id=3), B(left=64,vm=1,id=8)",
+    "expected_output": "B 优先",
+    "starter_code": "int MachineCmp(const void *pa, const void *pb) {\n    // TODO: 适配 VosPriQue 比较规则\n}",
+    "answer_code": "typedef struct { int id; int leftMemory; int vmNums; } Machine;\n\nint MachineCmp(const void *pa, const void *pb) {\n    const Machine *a = (const Machine *)pa;\n    const Machine *b = (const Machine *)pb;\n    if (a->leftMemory != b->leftMemory) return b->leftMemory - a->leftMemory;\n    if (a->vmNums != b->vmNums) return a->vmNums - b->vmNums;\n    return a->id - b->id;\n}",
+    "explanation": "按优先级顺序逐层比较，前一层分出胜负就立即返回。",
+    "common_mistakes": [
+      "优先级方向写反",
+      "未处理第三关键字 id"
+    ],
+    "related_functions": [
+      "VosPriQue",
+      "qsort"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "tpl_vosvector_push_sort",
+    "title": "VosVector 插入与排序",
+    "brief": "将输入整数逐个 push 到 VosVector，再升序排序后输出。",
+    "skill_tags": [
+      "VOS接口",
+      "排序",
+      "模板"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "[7,2,5]",
+    "expected_output": "[2,5,7]",
+    "starter_code": "VosVector *vec = VOS_VectorCreate(sizeof(int), NULL);\n// TODO: push + sort",
+    "answer_code": "int cmp_int(const void *a, const void *b) {\n    int x = *(const int *)a, y = *(const int *)b;\n    return (x > y) - (x < y);\n}\n\nVosVector *vec = VOS_VectorCreate(sizeof(int), NULL);\nfor (int i = 0; i < n; ++i) VOS_VectorPushBack(vec, &arr[i]);\nVOS_VectorSort(vec, cmp_int);",
+    "explanation": "VOS_VectorPushBack 传入元素地址而非值。",
+    "common_mistakes": [
+      "把 int 值强转成指针传入",
+      "cmp 返回值不规范"
+    ],
+    "related_functions": [
+      "VosVector"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "micro_vosmap_count_freq",
+    "title": "VosMap 统计词频",
+    "brief": "用 VosMap 统计字符串数组中每个词出现次数。",
+    "skill_tags": [
+      "VOS接口",
+      "哈希",
+      "统计"
+    ],
+    "source_problem": "log_traits",
+    "difficulty": 3,
+    "expected_time_seconds": 150,
+    "input_example": "[\"err\",\"warn\",\"err\"]",
+    "expected_output": "err:2 warn:1",
+    "starter_code": "VosMap *m = VOS_MapCreate(...);\n// TODO: 若 key 不存在则置 1，否则 +1",
+    "answer_code": "for (int i = 0; i < n; ++i) {\n    int *cnt = (int *)VOS_MapGet(m, words[i]);\n    if (cnt == NULL) {\n        int one = 1;\n        VOS_MapPut(m, words[i], &one);\n    } else {\n        int v = *cnt + 1;\n        VOS_MapPut(m, words[i], &v);\n    }\n}",
+    "explanation": "核心是 get-then-put 的更新路径。",
+    "common_mistakes": [
+      "key 生命周期无效",
+      "更新时未覆盖旧值"
+    ],
+    "related_functions": [
+      "VosMap"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_voshash_dedup",
+    "title": "VosHash 整数去重",
+    "brief": "用 VosHash 过滤输入数组中的重复整数。",
+    "skill_tags": [
+      "VOS接口",
+      "哈希",
+      "数组"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 100,
+    "input_example": "[4,2,4,3,2]",
+    "expected_output": "[4,2,3]",
+    "starter_code": "VosHash *h = VOS_HashCreate(...);\n// TODO: 出现过则跳过，未出现则写入结果",
+    "answer_code": "int out_n = 0;\nfor (int i = 0; i < n; ++i) {\n    if (VOS_HashFind(h, &arr[i]) == NULL) {\n        VOS_HashInsert(h, &arr[i]);\n        out[out_n++] = arr[i];\n    }\n}",
+    "explanation": "哈希集合判重是 O(1) 均摊。",
+    "common_mistakes": [
+      "Hash key 比较函数与哈希函数不一致",
+      "插入后未维护输出顺序"
+    ],
+    "related_functions": [
+      "VosHash"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_vosprique_topk",
+    "title": "VosPriQue 维护 TopK",
+    "brief": "用小顶堆保留数组中最大的 K 个数。",
+    "skill_tags": [
+      "VOS接口",
+      "优先队列",
+      "堆"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 170,
+    "input_example": "arr=[9,1,5,7,3], k=3",
+    "expected_output": "[5,7,9]",
+    "starter_code": "VosPriQue *pq = VOS_PriQueCreate(cmp_min_heap, &dupFree);\n// TODO: 维护容量为 k 的堆",
+    "answer_code": "for (int i = 0; i < n; ++i) {\n    if (VOS_PriQueSize(pq) < k) {\n        VOS_PriQuePush(pq, (uintptr_t)&arr[i]);\n    } else {\n        int *top = (int *)VOS_PriQueTop(pq);\n        if (arr[i] > *top) {\n            VOS_PriQuePop(pq);\n            VOS_PriQuePush(pq, (uintptr_t)&arr[i]);\n        }\n    }\n}",
+    "explanation": "固定大小小顶堆是 TopK 常见模板。",
+    "common_mistakes": [
+      "比较函数写成大顶堆",
+      "未判断 size<k 分支"
+    ],
+    "related_functions": [
+      "VosPriQue"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_qsort_bsearch_user_lookup",
+    "title": "排序后查找用户 ID",
+    "brief": "先按 id 升序 qsort，再用 bsearch 查找目标 id 是否存在。",
+    "skill_tags": [
+      "C接口",
+      "结构体"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 120,
+    "input_example": "users=[{id:3},{id:1},{id:8}], target=8",
+    "expected_output": "found=true",
+    "starter_code": "typedef struct { int id; char name[16]; } User;\n// TODO: cmp + sort + bsearch",
+    "answer_code": "int cmp_user(const void *a, const void *b) {\n    const User *ua = (const User *)a;\n    const User *ub = (const User *)b;\n    return (ua->id > ub->id) - (ua->id < ub->id);\n}\n\nint cmp_user_key(const void *key, const void *elem) {\n    int k = *(const int *)key;\n    const User *u = (const User *)elem;\n    return (k > u->id) - (k < u->id);\n}\n\nqsort(users, n, sizeof(User), cmp_user);\nUser *p = (User *)bsearch(&target, users, n, sizeof(User), cmp_user_key);",
+    "explanation": "结构体检索场景下建议分离元素比较与 key-elem 比较函数。",
+    "common_mistakes": [
+      "bsearch 比较函数签名不符合 key-elem 约定",
+      "未先排序"
+    ],
+    "related_functions": [
+      "qsort",
+      "bsearch"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_bitmask_vlan_check",
+    "title": "位掩码判断 VLAN 开关",
+    "brief": "给定 mask 和 vlan_id(1~32)，判断该位是否开启。",
+    "skill_tags": [
+      "位运算",
+      "掩码"
+    ],
+    "source_problem": "vlan_cmd_transform",
+    "difficulty": 1,
+    "expected_time_seconds": 45,
+    "input_example": "mask=0b1010, vlan_id=2",
+    "expected_output": "true",
+    "starter_code": "int is_on(unsigned int mask, int vlan_id) {\n    // TODO\n}",
+    "answer_code": "int is_on(unsigned int mask, int vlan_id) {\n    unsigned int bit = 1u << (vlan_id - 1);\n    return (mask & bit) != 0;\n}",
+    "explanation": "先构造目标位，再按位与判断是否非 0。",
+    "common_mistakes": [
+      "位偏移写成 vlan_id 而不是 vlan_id-1",
+      "把与运算写成或运算"
+    ],
+    "related_functions": [
+      "&",
+      "<<"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_prefix_sum_range_query",
+    "title": "前缀和区间求和",
+    "brief": "构建前缀和数组，O(1) 回答区间 [l,r] 的和。",
+    "skill_tags": [
+      "前缀和",
+      "数组"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 55,
+    "input_example": "a=[2,4,5,1], query=(1,3)",
+    "expected_output": "10",
+    "starter_code": "void build_prefix(int *a, int n, int *pre) {\n    // TODO\n}\nint range_sum(int *pre, int l, int r) {\n    // TODO\n}",
+    "answer_code": "void build_prefix(int *a, int n, int *pre) {\n    pre[0] = 0;\n    for (int i = 0; i < n; ++i) pre[i + 1] = pre[i] + a[i];\n}\n\nint range_sum(int *pre, int l, int r) {\n    return pre[r + 1] - pre[l];\n}",
+    "explanation": "使用长度 n+1 的前缀和，统一边界。",
+    "common_mistakes": [
+      "前缀和下标偏移错误",
+      "range_sum 边界处理错"
+    ],
+    "related_functions": [
+      "前缀和"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "micro_tlv_parse_leaf",
+    "title": "TLV 叶子节点解析",
+    "brief": "已知 T 最高位为 0，读取 L 后提取对应长度字符串内容。",
+    "skill_tags": [
+      "C接口",
+      "字符串处理",
+      "TLV",
+      "解析"
+    ],
+    "source_problem": "tlv_parser",
+    "difficulty": 3,
+    "expected_time_seconds": 160,
+    "input_example": "hex=00000000000568656c6c6f",
+    "expected_output": "hello",
+    "starter_code": "int parse_leaf(const char *hex, char *out, int cap) {\n    // TODO: 读取 2字节T + 4字节L + L字节V\n    return 0;\n}",
+    "answer_code": "static int hex_to_int(const char *s, int len) {\n    int v = 0;\n    for (int i = 0; i < len; ++i) {\n        char c = s[i];\n        int d = (c <= '9') ? (c - '0') : (c - 'a' + 10);\n        v = v * 16 + d;\n    }\n    return v;\n}\n\nint parse_leaf(const char *hex, char *out, int cap) {\n    int L = hex_to_int(hex + 4, 8);\n    const char *vhex = hex + 12;\n    if (L + 1 > cap) return -1;\n    for (int i = 0; i < L; ++i) {\n        int hi = hex_to_int(vhex + i * 2, 1);\n        int lo = hex_to_int(vhex + i * 2 + 1, 1);\n        out[i] = (char)(hi * 16 + lo);\n    }\n    out[L] = '\\0';\n    return L;\n}",
+    "explanation": "L 是字节长度，hex 文本里每字节占 2 字符。",
+    "common_mistakes": [
+      "把 L 当成 hex 字符长度",
+      "未预留字符串终止符"
+    ],
+    "related_functions": [
+      "strtol"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_iface_qsort",
+    "title": "接口速练：qsort 整数升序",
+    "brief": "为 int 数组编写比较函数并调用 qsort 升序排序。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "arr=[5,1,4,2]",
+    "expected_output": "[1,2,4,5]",
+    "starter_code": "int cmp(const void *a, const void *b) {\n    /* TODO */\n}\n\nqsort(arr, n, sizeof(arr[0]), cmp);",
+    "answer_code": "int cmp(const void *a, const void *b) {\n    int x = *(const int *)a;\n    int y = *(const int *)b;\n    return (x > y) - (x < y);\n}",
+    "explanation": "本题聚焦 qsort 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "qsort"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_bsearch",
+    "title": "接口速练：bsearch 查找整数",
+    "brief": "在有序数组中使用 bsearch 查找目标值。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "arr=[1,3,5,8], target=5",
+    "expected_output": "返回下标 2（找不到返回 -1）",
+    "starter_code": "int cmp_key(const void *key, const void *elem) {\n    /* TODO */\n}\n\nint find_idx(const int *arr, int n, int target) {\n    /* TODO */\n}",
+    "answer_code": "int cmp_key(const void *key, const void *elem) {\n    int k = *(const int *)key;\n    int e = *(const int *)elem;\n    return (k > e) - (k < e);\n}\n\nint find_idx(const int *arr, int n, int target) {\n    int *p = (int *)bsearch(&target, arr, (size_t)n, sizeof(int), cmp_key);\n    return p ? (int)(p - arr) : -1;\n}",
+    "explanation": "本题聚焦 bsearch 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "bsearch"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strcmp",
+    "title": "接口速练：strcmp 比较",
+    "brief": "比较两个字符串字典序，返回值只看正负和 0。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "a=\"abc\", b=\"abd\"",
+    "expected_output": "负数",
+    "starter_code": "int r = 0;\n/* TODO */",
+    "answer_code": "int r = strcmp(a, b);",
+    "explanation": "本题聚焦 strcmp 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strcmp"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strcpy_s",
+    "title": "接口速练：strcpy_s 安全拷贝",
+    "brief": "将 src 拷贝到 dst，并检查返回值。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "src=\"hello\"",
+    "expected_output": "dst=\"hello\"",
+    "starter_code": "char dst[16] = {0};\n/* TODO */",
+    "answer_code": "errno_t rc = strcpy_s(dst, sizeof(dst), src);\nif (rc != 0) { /* handle */ }",
+    "explanation": "本题聚焦 strcpy_s 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strcpy_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strncpy_s",
+    "title": "接口速练：strncpy_s 限长拷贝",
+    "brief": "将 src 的前 n 个字符拷贝到 dst。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "src=\"network\", n=4",
+    "expected_output": "dst=\"netw\"",
+    "starter_code": "char dst[16] = {0};\n/* TODO */",
+    "answer_code": "strncpy_s(dst, sizeof(dst), src, n);",
+    "explanation": "本题聚焦 strncpy_s 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strncpy_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strstr",
+    "title": "接口速练：strstr 子串定位",
+    "brief": "在日志中定位子串 \"ERROR\" 的首位置。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "line=\"[INFO]a[ERROR]b\"",
+    "expected_output": "返回首位置下标",
+    "starter_code": "int pos = -1;\n/* TODO */",
+    "answer_code": "char *p = strstr(line, \"ERROR\");\nif (p) pos = (int)(p - line);",
+    "explanation": "本题聚焦 strstr 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strstr"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strchr",
+    "title": "接口速练：strchr 查首个字符",
+    "brief": "在字符串中定位首个 ',' 的位置。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "s=\"a,b,c\"",
+    "expected_output": "下标 1",
+    "starter_code": "char *p = NULL;\n/* TODO */",
+    "answer_code": "char *p = strchr(s, ',');",
+    "explanation": "本题聚焦 strchr 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strchr"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strrchr",
+    "title": "接口速练：strrchr 查末个字符",
+    "brief": "在路径字符串中定位最后一个 '/'。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "s=\"/a/b/c.txt\"",
+    "expected_output": "指向 \"/c.txt\"",
+    "starter_code": "char *p = NULL;\n/* TODO */",
+    "answer_code": "char *p = strrchr(s, '/');",
+    "explanation": "本题聚焦 strrchr 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strrchr"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strtok_s",
+    "title": "接口速练：strtok_s 分词",
+    "brief": "将 \"10,20,30\" 按逗号拆成三个 token。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "line=\"10,20,30\"",
+    "expected_output": "[\"10\",\"20\",\"30\"]",
+    "starter_code": "char *ctx = NULL;\nchar *tok = strtok_s(line, \",\", &ctx);\nwhile (tok) {\n    /* TODO */\n    tok = strtok_s(NULL, \",\", &ctx);\n}",
+    "answer_code": "首次传原串，后续传 NULL，循环收集 token。",
+    "explanation": "本题聚焦 strtok_s 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strtok_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strcat_s",
+    "title": "接口速练：strcat_s 拼接字符串",
+    "brief": "把目录和文件名拼成完整路径。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "dir=\"/tmp\", file=\"/a.log\"",
+    "expected_output": "\"/tmp/a.log\"",
+    "starter_code": "char out[64] = {0};\n/* TODO */",
+    "answer_code": "strcpy_s(out, sizeof(out), dir);\nstrcat_s(out, sizeof(out), file);",
+    "explanation": "本题聚焦 strcat_s 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strcat_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_sscanf_s",
+    "title": "接口速练：sscanf_s 解析键值",
+    "brief": "从 \"id=17,mem=32\" 中解析 id 和 mem。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "line=\"id=17,mem=32\"",
+    "expected_output": "id=17, mem=32",
+    "starter_code": "int id = 0, mem = 0;\n/* TODO */",
+    "answer_code": "if (sscanf_s(line, \"id=%d,mem=%d\", &id, &mem) != 2) { /* invalid */ }",
+    "explanation": "本题聚焦 sscanf_s 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "sscanf_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_sprintf_s",
+    "title": "接口速练：sprintf_s 格式化输出",
+    "brief": "将 id=3 格式化为 \"node-03\"。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "id=3",
+    "expected_output": "node-03",
+    "starter_code": "char out[32] = {0};\n/* TODO */",
+    "answer_code": "sprintf_s(out, sizeof(out), \"node-%02d\", id);",
+    "explanation": "本题聚焦 sprintf_s 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "sprintf_s"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strtol",
+    "title": "接口速练：strtol 进制转换",
+    "brief": "把 \"0x1f\" 转为十进制，并校验合法输入。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "text=\"0x1f\"",
+    "expected_output": "31",
+    "starter_code": "char *end = NULL;\n/* TODO */",
+    "answer_code": "long v = strtol(text, &end, 0);\nif (end == text || *end != '\\0') { /* invalid */ }",
+    "explanation": "本题聚焦 strtol 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strtol"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_strtoll",
+    "title": "接口速练：strtoll 64位转换",
+    "brief": "把长整数字符串转为 long long。",
+    "skill_tags": [
+      "C接口",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "text=\"922337203685477580\"",
+    "expected_output": "long long 值",
+    "starter_code": "char *end = NULL;\n/* TODO */",
+    "answer_code": "long long v = strtoll(text, &end, 10);\nif (end == text || *end != '\\0') { /* invalid */ }",
+    "explanation": "本题聚焦 strtoll 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "strtoll"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_bit_and",
+    "title": "接口速练：按位与掩码判断",
+    "brief": "判断 flags 的第 n 位是否为 1。",
+    "skill_tags": [
+      "C接口",
+      "bit_and",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "flags=10(1010b), n=1",
+    "expected_output": "1",
+    "starter_code": "int on = 0;\n/* TODO */",
+    "answer_code": "int on = (flags & (1u << n)) != 0;",
+    "explanation": "本题聚焦 bit_and 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "bit_and"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_bit_or",
+    "title": "接口速练：按位或置位",
+    "brief": "将 flags 的第 n 位置 1。",
+    "skill_tags": [
+      "C接口",
+      "bit_or",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "flags=0, n=3",
+    "expected_output": "8",
+    "starter_code": "/* TODO */",
+    "answer_code": "flags |= (1u << n);",
+    "explanation": "本题聚焦 bit_or 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "bit_or"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_bit_xor",
+    "title": "接口速练：按位异或翻转",
+    "brief": "翻转 flags 的第 n 位。",
+    "skill_tags": [
+      "C接口",
+      "bit_xor",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "flags=8, n=3",
+    "expected_output": "0",
+    "starter_code": "/* TODO */",
+    "answer_code": "flags ^= (1u << n);",
+    "explanation": "本题聚焦 bit_xor 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "bit_xor"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_bit_not",
+    "title": "接口速练：按位取反并截断",
+    "brief": "对 x 取反后仅保留低 8 位。",
+    "skill_tags": [
+      "C接口",
+      "bit_not",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "x=0x0f",
+    "expected_output": "0xf0",
+    "starter_code": "unsigned int y = 0;\n/* TODO */",
+    "answer_code": "unsigned int y = (~x) & 0xffu;",
+    "explanation": "本题聚焦 bit_not 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "bit_not"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_left_shift",
+    "title": "接口速练：左移乘幂",
+    "brief": "计算 x * 2^k。",
+    "skill_tags": [
+      "C接口",
+      "left_shift",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "x=7, k=2",
+    "expected_output": "28",
+    "starter_code": "int y = 0;\n/* TODO */",
+    "answer_code": "int y = x << k;",
+    "explanation": "本题聚焦 left_shift 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "left_shift"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_iface_right_shift",
+    "title": "接口速练：右移除幂",
+    "brief": "对非负整数计算 x / 2^k。",
+    "skill_tags": [
+      "C接口",
+      "right_shift",
+      "模板速练"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "x=40, k=3",
+    "expected_output": "5",
+    "starter_code": "int y = 0;\n/* TODO */",
+    "answer_code": "int y = x >> k;",
+    "explanation": "本题聚焦 right_shift 的正确用法与边界处理。",
+    "common_mistakes": [
+      "参数顺序写反",
+      "忽略返回值或边界条件"
+    ],
+    "related_functions": [
+      "right_shift"
+    ],
+    "language": "C",
+    "mode": "template"
+  },
+  {
+    "id": "ext_algo_array_enum",
+    "title": "算法速练：数组枚举模板",
+    "brief": "遍历数组统计偶数个数。",
+    "skill_tags": [
+      "algorithm",
+      "enumeration",
+      "array"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 50,
+    "input_example": "a=[1,2,3,4,6]",
+    "expected_output": "3",
+    "starter_code": "int cnt_even(const int *a, int n) {\n    /* TODO */\n}",
+    "answer_code": "int cnt_even(const int *a, int n) {\n    int c = 0;\n    for (int i = 0; i < n; ++i) if ((a[i] & 1) == 0) ++c;\n    return c;\n}",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "enumeration"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_queue_basic",
+    "title": "算法速练：队列基础操作",
+    "brief": "用环形数组实现 push/pop。",
+    "skill_tags": [
+      "algorithm",
+      "queue"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 60,
+    "input_example": "cap=4, push 1,2,3, pop",
+    "expected_output": "pop=1",
+    "starter_code": "int push(Q *q, int x) { /* TODO */ }\nint pop(Q *q, int *x) { /* TODO */ }",
+    "answer_code": "维护 head/tail/count，入队写 tail，出队读 head。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "queue"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_stack_basic",
+    "title": "算法速练：栈基础操作",
+    "brief": "判断括号串是否合法。",
+    "skill_tags": [
+      "algorithm",
+      "stack"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 60,
+    "input_example": "s=\"([]){}\"",
+    "expected_output": "true",
+    "starter_code": "int valid(const char *s) { /* TODO */ }",
+    "answer_code": "左括号入栈，右括号匹配栈顶，最后栈空即合法。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "stack"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_linked_list",
+    "title": "算法速练：链表指针操作",
+    "brief": "迭代反转单链表。",
+    "skill_tags": [
+      "algorithm",
+      "linked-list"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "1->2->3",
+    "expected_output": "3->2->1",
+    "starter_code": "Node *reverse(Node *head) { /* TODO */ }",
+    "answer_code": "三指针 prev/cur/next 迭代反转。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "linked-list"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_hash_map",
+    "title": "算法速练：哈希/Map 频次统计",
+    "brief": "统计数组元素出现次数。",
+    "skill_tags": [
+      "algorithm",
+      "hash",
+      "map"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "[4,1,4,2]",
+    "expected_output": "4:2,1:1,2:1",
+    "starter_code": "/* TODO: map[key]++ */",
+    "answer_code": "第一遍计数，第二遍按需求输出。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "hash"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_tree_dfs",
+    "title": "算法速练：树 DFS 模板",
+    "brief": "完成二叉树前序遍历。",
+    "skill_tags": [
+      "algorithm",
+      "tree",
+      "DFS"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "root=[1,2,3]",
+    "expected_output": "[1,2,3]",
+    "starter_code": "void dfs(Node *x) { /* TODO */ }",
+    "answer_code": "if(!x) return; visit(x); dfs(x->left); dfs(x->right);",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "tree"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_graph_bfs",
+    "title": "算法速练：图 BFS 模板",
+    "brief": "判断图中 s 与 t 是否连通。",
+    "skill_tags": [
+      "algorithm",
+      "graph",
+      "BFS"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 100,
+    "input_example": "n=4, edges=[[0,1],[1,2]], s=0,t=2",
+    "expected_output": "true",
+    "starter_code": "int connected(...) { /* TODO */ }",
+    "answer_code": "邻接表 + 队列 + visited，首次到达 t 即返回 true。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "graph"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_sliding_window",
+    "title": "算法速练：滑窗窗口维护",
+    "brief": "求和>=target 的最短子数组长度。",
+    "skill_tags": [
+      "algorithm",
+      "sliding-window"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "a=[2,3,1,2,4,3], target=7",
+    "expected_output": "2",
+    "starter_code": "int min_len(...) { /* TODO */ }",
+    "answer_code": "右指针扩张，满足后左指针收缩更新最优长度。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "sliding-window"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_two_pointers",
+    "title": "算法速练：双指针收缩模板",
+    "brief": "有序数组原地去重并返回新长度。",
+    "skill_tags": [
+      "algorithm",
+      "two-pointers"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 60,
+    "input_example": "[1,1,2,2,3]",
+    "expected_output": "3",
+    "starter_code": "int dedup(int *a, int n) { /* TODO */ }",
+    "answer_code": "fast 扫描，slow 写入新位置。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "two-pointers"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_prefix_sum",
+    "title": "算法速练：前缀和区间查询",
+    "brief": "构建前缀和后 O(1) 回答区间和。",
+    "skill_tags": [
+      "algorithm",
+      "prefix-sum"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 60,
+    "input_example": "a=[2,4,5,1], query=[1,3]",
+    "expected_output": "10",
+    "starter_code": "void build(...){/*TODO*/}\nint sum(...){/*TODO*/}",
+    "answer_code": "pre[i+1]=pre[i]+a[i]，区间和=pre[r+1]-pre[l]。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "prefix-sum"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_recursion",
+    "title": "算法速练：递归终止条件",
+    "brief": "实现递归阶乘函数。",
+    "skill_tags": [
+      "algorithm",
+      "recursion"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 45,
+    "input_example": "n=5",
+    "expected_output": "120",
+    "starter_code": "long long f(int n) { /* TODO */ }",
+    "answer_code": "return n<=1 ? 1 : (long long)n * f(n-1);",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "recursion"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_backtracking",
+    "title": "算法速练：回溯框架练习",
+    "brief": "输出 [1,2,3] 的全排列。",
+    "skill_tags": [
+      "algorithm",
+      "backtracking"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 110,
+    "input_example": "[1,2,3]",
+    "expected_output": "6 个排列",
+    "starter_code": "void dfs(...) { /* TODO: used[] + path */ }",
+    "answer_code": "做选择 -> 递归 -> 撤销选择。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "backtracking"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_divide_conquer",
+    "title": "算法速练：分治拆分与合并",
+    "brief": "实现归并排序核心 merge。",
+    "skill_tags": [
+      "algorithm",
+      "divide-conquer"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 130,
+    "input_example": "[5,2,4,1]",
+    "expected_output": "[1,2,4,5]",
+    "starter_code": "void merge_sort(...) { /* TODO */ }",
+    "answer_code": "递归分两半，merge 阶段双指针合并。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "divide-conquer"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_binary_search",
+    "title": "算法速练：二分边界查找",
+    "brief": "在有序数组中找第一个 >= target 的下标。",
+    "skill_tags": [
+      "algorithm",
+      "binary-search"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 80,
+    "input_example": "a=[1,2,4,4,9], target=4",
+    "expected_output": "2",
+    "starter_code": "int lower_bound(...) { /* TODO */ }",
+    "answer_code": "[l,r) 模板：while(l<r){...}",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "binary-search"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_algo_greedy",
+    "title": "算法速练：贪心局部最优选择",
+    "brief": "区间调度：选最多不重叠区间。",
+    "skill_tags": [
+      "algorithm",
+      "greedy"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 80,
+    "input_example": "[(1,3),(2,4),(3,5),(0,6)]",
+    "expected_output": "2",
+    "starter_code": "int solve(...) { /* TODO */ }",
+    "answer_code": "按结束时间升序排序，贪心选择可接上的区间。",
+    "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
+    "common_mistakes": [
+      "边界条件遗漏",
+      "状态更新顺序错误"
+    ],
+    "related_functions": [
+      "greedy"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_vos_vosvector",
+    "title": "VOS速练：VosVector 创建与插入",
+    "brief": "创建 VosVector 并 push [3,1,2]。",
+    "skill_tags": [
+      "VOS接口"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "arr=[3,1,2]",
+    "expected_output": "vector 大小为 3",
+    "starter_code": "VosVector *vec = VOS_VectorCreate(sizeof(int), NULL);\n/* TODO */",
+    "answer_code": "for (int i = 0; i < 3; ++i) VOS_VectorPushBack(vec, &arr[i]);",
+    "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
+    "common_mistakes": [
+      "传入悬挂指针",
+      "忘记销毁或释放资源"
+    ],
+    "related_functions": [
+      "Vosvector"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_vos_voslist",
+    "title": "VOS速练：VosList 删除偶数",
+    "brief": "遍历 VosList 删除所有偶数元素。",
+    "skill_tags": [
+      "VOS接口"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "list=[1,2,3,4]",
+    "expected_output": "list=[1,3]",
+    "starter_code": "/* TODO: 删除时注意先缓存 next */",
+    "answer_code": "遍历时先取 next，再按条件删除当前节点。",
+    "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
+    "common_mistakes": [
+      "传入悬挂指针",
+      "忘记销毁或释放资源"
+    ],
+    "related_functions": [
+      "Voslist"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_vos_vosmap",
+    "title": "VOS速练：VosMap 基础读写",
+    "brief": "读取 key，不存在则写入默认值 0。",
+    "skill_tags": [
+      "VOS接口"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "key=\"latency\"",
+    "expected_output": "map 中存在该 key",
+    "starter_code": "/* TODO: get -> put */",
+    "answer_code": "int *p=(int*)VOS_MapGet(map,key); if(!p){int z=0; VOS_MapPut(map,key,&z);}",
+    "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
+    "common_mistakes": [
+      "传入悬挂指针",
+      "忘记销毁或释放资源"
+    ],
+    "related_functions": [
+      "Vosmap"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_vos_vosprique",
+    "title": "VOS速练：VosPriQue 三重优先级",
+    "brief": "实现比较函数：剩余内存大优先，部署数少优先，id 小优先。",
+    "skill_tags": [
+      "VOS接口"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "A(left=64,vm=2,id=3), B(left=64,vm=1,id=8)",
+    "expected_output": "B 优先",
+    "starter_code": "int MachineCmp(const void *a, const void *b) { /* TODO */ }",
+    "answer_code": "if (a->left != b->left) return b->left - a->left;\nif (a->vm != b->vm) return a->vm - b->vm;\nreturn a->id - b->id;",
+    "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
+    "common_mistakes": [
+      "传入悬挂指针",
+      "忘记销毁或释放资源"
+    ],
+    "related_functions": [
+      "Vosprique"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_vos_voshash",
+    "title": "VOS速练：VosHash 整数去重",
+    "brief": "用 VosHash 过滤重复整数。",
+    "skill_tags": [
+      "VOS接口"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "arr=[4,2,4,3,2]",
+    "expected_output": "[4,2,3]",
+    "starter_code": "/* TODO: find + insert */",
+    "answer_code": "若 VOS_HashFind 为 NULL 则插入并写入结果。",
+    "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
+    "common_mistakes": [
+      "传入悬挂指针",
+      "忘记销毁或释放资源"
+    ],
+    "related_functions": [
+      "Voshash"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_vos_vosvectorsort",
+    "title": "VOS速练：VosVector 排序",
+    "brief": "将 VosVector 中 int 升序排序。",
+    "skill_tags": [
+      "VOS接口"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "vec=[7,2,5]",
+    "expected_output": "[2,5,7]",
+    "starter_code": "int cmp(const void *a,const void *b){/* TODO */}\n/* TODO: VOS_VectorSort */",
+    "answer_code": "cmp 返回三值比较；调用 VOS_VectorSort(vec, cmp)。",
+    "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
+    "common_mistakes": [
+      "传入悬挂指针",
+      "忘记销毁或释放资源"
+    ],
+    "related_functions": [
+      "Vosvectorsort"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_vos_vosmapfreq",
+    "title": "VOS速练：VosMap 词频统计",
+    "brief": "统计字符串数组词频。",
+    "skill_tags": [
+      "VOS接口"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "[\"err\",\"warn\",\"err\"]",
+    "expected_output": "err:2 warn:1",
+    "starter_code": "/* TODO: get 后 +1 或 put 1 */",
+    "answer_code": "不存在写 1，存在取值 +1 后回写。",
+    "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
+    "common_mistakes": [
+      "传入悬挂指针",
+      "忘记销毁或释放资源"
+    ],
+    "related_functions": [
+      "Vosmapfreq"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "ext_vos_vospriquedispatch",
+    "title": "VOS速练：VosPriQue 单次调度",
+    "brief": "取堆顶机器处理一个请求并回写优先队列。",
+    "skill_tags": [
+      "VOS接口"
+    ],
+    "source_problem": "vm_deploy",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "request=16",
+    "expected_output": "返回分配机器 id 或 -1",
+    "starter_code": "/* TODO: top -> check -> pop/push */",
+    "answer_code": "top 查看后满足条件则 pop，再 push 更新后的机器状态。",
+    "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
+    "common_mistakes": [
+      "传入悬挂指针",
+      "忘记销毁或释放资源"
+    ],
+    "related_functions": [
+      "Vospriquedispatch"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_subset_unique_once",
+    "title": "回溯9型-子集（无重不可复选）",
+    "brief": "nums 元素唯一、每个元素最多使用一次，输出全部子集。",
+    "skill_tags": [
+      "回溯",
+      "子集",
+      "无重不可复选"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "nums=[1,2,3]",
+    "expected_output": "[[],[1],[2],[3],[1,2],[1,3],[2,3],[1,2,3]]",
+    "starter_code": "void dfs(int *nums,int n,int idx){ /* TODO */ }",
+    "answer_code": "void dfs(int *nums,int n,int idx){\n    record_path();\n    for(int i=idx;i<n;i++){\n        path_push(nums[i]);\n        dfs(nums,n,i+1);\n        path_pop();\n    }\n}",
+    "explanation": "子集题在进入节点时即可收集答案。",
+    "common_mistakes": [
+      "漏收集空集",
+      "idx 不前进导致重复"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_comb_sum_unique_once",
+    "title": "回溯9型-组合求和（无重不可复选）",
+    "brief": "nums 元素唯一、每个元素最多使用一次，求和为 target 的组合。",
+    "skill_tags": [
+      "回溯",
+      "组合",
+      "无重不可复选"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 130,
+    "input_example": "nums=[2,3,6,7], target=7",
+    "expected_output": "[[7]]",
+    "starter_code": "void dfs(int *nums,int n,int idx,int remain){ /* TODO */ }",
+    "answer_code": "void dfs(int *nums,int n,int idx,int remain){\n    if(remain==0){ record_path(); return; }\n    if(remain<0) return;\n    for(int i=idx;i<n;i++){\n        path_push(nums[i]);\n        dfs(nums,n,i+1,remain-nums[i]);\n        path_pop();\n    }\n}",
+    "explanation": "不可复选的关键是递归参数传 i+1。",
+    "common_mistakes": [
+      "把 i+1 写成 i",
+      "remain<0 不剪枝"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_perm_unique_once",
+    "title": "回溯9型-排列（无重不可复选）",
+    "brief": "nums 元素唯一、每个元素最多使用一次，输出全排列。",
+    "skill_tags": [
+      "回溯",
+      "排列",
+      "无重不可复选"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 110,
+    "input_example": "nums=[1,2,3]",
+    "expected_output": "6 个排列",
+    "starter_code": "void dfs(int *nums,int n){ /* TODO: used[] */ }",
+    "answer_code": "void dfs(int *nums,int n){\n    if(path_size()==n){ record_path(); return; }\n    for(int i=0;i<n;i++){\n        if(used[i]) continue;\n        used[i]=1; path_push(nums[i]);\n        dfs(nums,n);\n        path_pop(); used[i]=0;\n    }\n}",
+    "explanation": "排列使用 used[]，而不是 start 下标。",
+    "common_mistakes": [
+      "回溯时没恢复 used",
+      "把排列写成组合"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_subset_dup_once",
+    "title": "回溯9型-子集（有重不可复选）",
+    "brief": "nums 可重复、每个元素最多使用一次，输出去重子集。",
+    "skill_tags": [
+      "回溯",
+      "子集",
+      "有重不可复选",
+      "去重"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 130,
+    "input_example": "nums=[1,2,2]",
+    "expected_output": "[[],[1],[2],[1,2],[2,2],[1,2,2]]",
+    "starter_code": "// TODO: 先排序，再做同层去重",
+    "answer_code": "for(int i=idx;i<n;i++){\n    if(i>idx && nums[i]==nums[i-1]) continue;\n    path_push(nums[i]);\n    dfs(nums,n,i+1);\n    path_pop();\n}",
+    "explanation": "去重条件是 i>idx 且 nums[i]==nums[i-1]。",
+    "common_mistakes": [
+      "写成 i>0 导致跨层误杀",
+      "忘记先排序"
+    ],
+    "related_functions": [
+      "??",
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_comb_sum_dup_once",
+    "title": "回溯9型-组合求和（有重不可复选）",
+    "brief": "nums 可重复、每个元素最多使用一次，输出去重组合和。",
+    "skill_tags": [
+      "回溯",
+      "组合",
+      "有重不可复选",
+      "去重"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 4,
+    "expected_time_seconds": 170,
+    "input_example": "nums=[2,5,2,1,2], target=7",
+    "expected_output": "[[1,2,2,2],[2,5]]",
+    "starter_code": "// TODO: sort + 同层去重 + i+1 递归",
+    "answer_code": "void dfs(int *a,int n,int idx,int remain){\n    if(remain==0){record_path();return;}\n    for(int i=idx;i<n;i++){\n        if(i>idx && a[i]==a[i-1]) continue;\n        if(a[i]>remain) break;\n        path_push(a[i]);\n        dfs(a,n,i+1,remain-a[i]);\n        path_pop();\n    }\n}",
+    "explanation": "这是最典型的“排序+去重+不可复选”组合题。",
+    "common_mistakes": [
+      "去重条件层级写错",
+      "递归错误传 i"
+    ],
+    "related_functions": [
+      "??",
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_perm_dup_once",
+    "title": "回溯9型-排列（有重不可复选）",
+    "brief": "nums 可重复、每个元素最多使用一次，输出去重排列。",
+    "skill_tags": [
+      "回溯",
+      "排列",
+      "有重不可复选",
+      "去重"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 4,
+    "expected_time_seconds": 170,
+    "input_example": "nums=[1,1,2]",
+    "expected_output": "[[1,1,2],[1,2,1],[2,1,1]]",
+    "starter_code": "// TODO: sort + used[] + 同层剪枝",
+    "answer_code": "for(int i=0;i<n;i++){\n    if(used[i]) continue;\n    if(i>0 && nums[i]==nums[i-1] && !used[i-1]) continue;\n    used[i]=1; path_push(nums[i]);\n    dfs(nums,n);\n    path_pop(); used[i]=0;\n}",
+    "explanation": "排列去重条件依赖“前一个相同值是否已被使用”。",
+    "common_mistakes": [
+      "去重条件写反",
+      "未排序导致去重失效"
+    ],
+    "related_functions": [
+      "??",
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_subset_unique_repeat",
+    "title": "回溯9型-子集（无重可复选）",
+    "brief": "nums 元素唯一、允许重复选，生成长度<=k 的子集序列。",
+    "skill_tags": [
+      "回溯",
+      "子集",
+      "无重可复选"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 120,
+    "input_example": "nums=[2,3], k=3",
+    "expected_output": "如 [2,2]、[2,3]、[3,3] 等",
+    "starter_code": "// TODO: 可复选时下一层仍从 i 开始",
+    "answer_code": "for(int i=idx;i<n;i++){\n    path_push(nums[i]);\n    dfs(nums,n,i,depth+1);\n    path_pop();\n}",
+    "explanation": "可复选与不可复选只差递归参数 i / i+1。",
+    "common_mistakes": [
+      "写成 i+1 导致不可复选",
+      "未限制长度上界"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_comb_sum_unique_repeat",
+    "title": "回溯9型-组合求和（无重可复选）",
+    "brief": "nums 元素唯一、允许重复选，求和为 target 的组合。",
+    "skill_tags": [
+      "回溯",
+      "组合",
+      "无重可复选"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 140,
+    "input_example": "nums=[2,3,6,7], target=7",
+    "expected_output": "[[2,2,3],[7]]",
+    "starter_code": "// TODO: 递归参数传 i，并做 remain 剪枝",
+    "answer_code": "void dfs(int *a,int n,int idx,int remain){\n    if(remain==0){record_path();return;}\n    for(int i=idx;i<n;i++){\n        if(a[i]>remain) break;\n        path_push(a[i]);\n        dfs(a,n,i,remain-a[i]);\n        path_pop();\n    }\n}",
+    "explanation": "这是可复选组合模板：dfs(i, remain-a[i])。",
+    "common_mistakes": [
+      "写成 i+1",
+      "排序后仍未利用 break 剪枝"
+    ],
+    "related_functions": [
+      "??",
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bt_perm_unique_repeat",
+    "title": "回溯9型-排列（无重可复选）",
+    "brief": "nums 元素唯一、允许重复选，输出长度 k 的排列序列。",
+    "skill_tags": [
+      "回溯",
+      "排列",
+      "无重可复选"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 120,
+    "input_example": "nums=[1,2], k=3",
+    "expected_output": "8 个长度为 3 的序列",
+    "starter_code": "// TODO: 每层均可从 0..n-1 选择",
+    "answer_code": "void dfs(int *a,int n,int k){\n    if(path_size()==k){record_path();return;}\n    for(int i=0;i<n;i++){\n        path_push(a[i]);\n        dfs(a,n,k);\n        path_pop();\n    }\n}",
+    "explanation": "可复选排列不需要 used[]。",
+    "common_mistakes": [
+      "错误引入 used[]",
+      "终止条件写错"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "dfs_traversal_collect_leaves",
+    "title": "DFS-遍历思维：收集叶子路径",
+    "brief": "维护 path，从 root 到 leaf 收集全部路径。",
+    "skill_tags": [
+      "DFS",
+      "遍历思维",
+      "树"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 110,
+    "input_example": "二叉树 root",
+    "expected_output": "所有根到叶路径",
+    "starter_code": "void dfs(Node *x){ /* TODO */ }",
+    "answer_code": "void dfs(Node *x){\n    if(!x) return;\n    path_push(x->val);\n    if(!x->left && !x->right) record_path();\n    dfs(x->left);\n    dfs(x->right);\n    path_pop();\n}",
+    "explanation": "遍历思维强调过程状态维护与回溯恢复。",
+    "common_mistakes": [
+      "忘记 path_pop()",
+      "叶子判定时机错误"
+    ],
+    "related_functions": [
+      "DFS",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "dfs_traversal_component_count",
+    "title": "DFS-遍历思维：连通块计数",
+    "brief": "在网格中用 DFS 染色，统计连通块数量。",
+    "skill_tags": [
+      "DFS",
+      "遍历思维",
+      "图"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 120,
+    "input_example": "grid 0/1",
+    "expected_output": "连通块个数",
+    "starter_code": "void flood(int x,int y){ /* TODO */ }",
+    "answer_code": "for each cell==1: ans++, flood(i,j);\nflood: mark visited first, then expand in 4 directions.",
+    "explanation": "典型模式是“外层枚举起点 + 内层 DFS 扩展”。",
+    "common_mistakes": [
+      "没有及时标记访问",
+      "边界判断不完整"
+    ],
+    "related_functions": [
+      "DFS"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "dfs_divide_tree_height",
+    "title": "DFS-分解思维：树高度",
+    "brief": "返回子问题结果：height(root)=max(hL,hR)+1。",
+    "skill_tags": [
+      "DFS",
+      "分解思维",
+      "树"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 1,
+    "expected_time_seconds": 70,
+    "input_example": "二叉树 root",
+    "expected_output": "最大深度",
+    "starter_code": "int height(Node *x){ /* TODO */ }",
+    "answer_code": "int height(Node *x){\n    if(!x) return 0;\n    int l=height(x->left), r=height(x->right);\n    return (l>r?l:r)+1;\n}",
+    "explanation": "分解思维关注函数返回值，不依赖全局路径状态。",
+    "common_mistakes": [
+      "空节点返回值写错",
+      "混用遍历式全局变量"
+    ],
+    "related_functions": [
+      "DFS",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "dfs_divide_balanced_tree",
+    "title": "DFS-分解思维：平衡二叉树判断",
+    "brief": "递归返回子树高度（或 -1），判断整树是否平衡。",
+    "skill_tags": [
+      "DFS",
+      "分解思维",
+      "树"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 140,
+    "input_example": "二叉树 root",
+    "expected_output": "true/false",
+    "starter_code": "int check(Node *x){ /* 返回高度或 -1 */ }",
+    "answer_code": "int check(Node *x){\n    if(!x) return 0;\n    int l=check(x->left); if(l==-1) return -1;\n    int r=check(x->right); if(r==-1) return -1;\n    if(abs(l-r)>1) return -1;\n    return (l>r?l:r)+1;\n}",
+    "explanation": "核心是“分解 + 失败哨兵值”模式。",
+    "common_mistakes": [
+      "发现 -1 后没立即返回",
+      "混用遍历式写法"
+    ],
+    "related_functions": [
+      "DFS",
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bs_lcro_first_ge",
+    "title": "二分边界-左闭右开 [l,r) 找第一个 >= target",
+    "brief": "实现 lower_bound，区间不变量采用 [l,r)。",
+    "skill_tags": [
+      "二分",
+      "左闭右开",
+      "边界"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "a=[1,2,4,4,7], t=4",
+    "expected_output": "2",
+    "starter_code": "int lower_bound(int *a,int n,int t){ /* TODO */ }",
+    "answer_code": "int l=0,r=n;\nwhile(l<r){ int m=l+(r-l)/2; if(a[m]>=t) r=m; else l=m+1; }\nreturn l;",
+    "explanation": "区间收缩到 l==r 时，答案落在 l。",
+    "common_mistakes": [
+      "r 初始化为 n-1",
+      "while 条件写成 <="
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bs_lcro_first_gt",
+    "title": "二分边界-左闭右开 [l,r) 找第一个 > target",
+    "brief": "实现 upper_bound，区间不变量采用 [l,r)。",
+    "skill_tags": [
+      "二分",
+      "左闭右开",
+      "边界"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 2,
+    "expected_time_seconds": 90,
+    "input_example": "a=[1,2,4,4,7], t=4",
+    "expected_output": "4",
+    "starter_code": "int upper_bound(int *a,int n,int t){ /* TODO */ }",
+    "answer_code": "int l=0,r=n;\nwhile(l<r){ int m=l+(r-l)/2; if(a[m]>t) r=m; else l=m+1; }\nreturn l;",
+    "explanation": "与 lower_bound 仅判定条件不同。",
+    "common_mistakes": [
+      "误用 >= 条件",
+      "边界更新方向写反"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bs_lcrc_last_le",
+    "title": "二分边界-左闭右闭 [l,r] 找最后一个 <= target",
+    "brief": "返回最后一个 <=target 的下标，不存在返回 -1。",
+    "skill_tags": [
+      "二分",
+      "左闭右闭",
+      "边界"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 110,
+    "input_example": "a=[1,2,4,4,7], t=4",
+    "expected_output": "3",
+    "starter_code": "int last_le(int *a,int n,int t){ /* TODO */ }",
+    "answer_code": "int l=0,r=n-1,ans=-1;\nwhile(l<=r){ int m=l+(r-l)/2; if(a[m]<=t){ ans=m; l=m+1; } else r=m-1; }\nreturn ans;",
+    "explanation": "闭区间写法常用 ans 记录当前可行解。",
+    "common_mistakes": [
+      "遗漏 ans 默认值",
+      "while 条件写错"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bs_lcrc_first_ge",
+    "title": "二分边界-左闭右闭 [l,r] 找第一个 >= target",
+    "brief": "返回第一个 >=target 的下标，不存在返回 n。",
+    "skill_tags": [
+      "二分",
+      "左闭右闭",
+      "边界"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 110,
+    "input_example": "a=[1,2,4,4,7], t=3",
+    "expected_output": "2",
+    "starter_code": "int first_ge(int *a,int n,int t){ /* TODO */ }",
+    "answer_code": "int l=0,r=n-1,ans=n;\nwhile(l<=r){ int m=l+(r-l)/2; if(a[m]>=t){ ans=m; r=m-1; } else l=m+1; }\nreturn ans;",
+    "explanation": "本质仍是 lower_bound，只是区间模型不同。",
+    "common_mistakes": [
+      "没设置 ans=n",
+      "r 更新为 m 导致死循环"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bs_locr_find_peak",
+    "title": "二分边界-左开右闭 (l,r] 峰值查找",
+    "brief": "使用 (l,r] 模板在山峰数组中定位峰顶。",
+    "skill_tags": [
+      "二分",
+      "左开右闭",
+      "边界"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 4,
+    "expected_time_seconds": 150,
+    "input_example": "a=[1,3,5,4,2]",
+    "expected_output": "2",
+    "starter_code": "int peak(int *a,int n){ /* TODO */ }",
+    "answer_code": "int l=-1,r=n-1;\nwhile(l+1<r){ int m=l+(r-l)/2; if(a[m]<a[m+1]) l=m; else r=m; }\nreturn r;",
+    "explanation": "该模板适合“答案必在右闭区间”的题型。",
+    "common_mistakes": [
+      "m+1 越界",
+      "循环条件误写"
+    ],
+    "related_functions": [
+      "??",
+      "??",
+      "????"
+    ],
+    "language": "C",
+    "mode": "micro"
+  },
+  {
+    "id": "bs_template_compare",
+    "title": "二分模板对照：三种区间写法互转",
+    "brief": "对比 [l,r)、[l,r]、(l,r] 三种写法并补全边界更新。",
+    "skill_tags": [
+      "二分",
+      "模板题",
+      "边界"
+    ],
+    "source_problem": "standalone",
+    "difficulty": 3,
+    "expected_time_seconds": 140,
+    "input_example": "模板填空题",
+    "expected_output": "三种模板都能正确终止",
+    "starter_code": "// TODO: 补全每种模板的 while 条件和更新语句",
+    "answer_code": "[l,r): while(l<r)\n[l,r]: while(l<=r)\n(l,r]: while(l+1<r)\n并配套使用正确的 l/r 更新。",
+    "explanation": "重点是维护区间不变量，而不是死记代码。",
+    "common_mistakes": [
+      "混用不同模板的更新规则",
+      "退出条件与区间模型不匹配"
+    ],
+    "related_functions": [
+      "??",
+      "??"
+    ],
+    "language": "C",
+    "mode": "micro"
+  }
+]
