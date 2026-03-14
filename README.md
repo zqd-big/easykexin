@@ -22,6 +22,12 @@ npm run dev
 - 前端 `http://localhost:5173`
 - 后端 `http://localhost:8787`
 
+## 3.1 免 Node 一键运行（推荐内网）
+进入 `portable` 目录，直接双击：
+- `run-portable.bat`
+
+即可在浏览器打开离线版，不需要安装 Node.js / npm。
+
 ## 4. 核心接口
 - `GET /api/meta`
 - `GET /api/questions`
