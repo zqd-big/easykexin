@@ -19,9 +19,17 @@ export default function BankPage() {
   }, []);
 
   useEffect(() => {
+    setFunc("");
+  }, [skill]);
+
+  useEffect(() => {
     const d = difficulty ? Number(difficulty) : undefined;
     fetchQuestions({ skill: skill || undefined, func: func || undefined, difficulty: d }).then(setQuestions);
   }, [skill, func, difficulty]);
+
+  const isInterfaceSkill = skill === "C接口" || skill === "VOS接口";
+  const functionOptions =
+    skill === "VOS接口" ? functions.filter((f) => /^Vos/i.test(f)) : functions.filter((f) => !/^Vos/i.test(f));
 
   return (
     <section>
@@ -36,14 +44,16 @@ export default function BankPage() {
           ))}
         </select>
 
-        <select value={func} onChange={(e) => setFunc(e.target.value)}>
-          <option value="">全部函数</option>
-          {functions.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
+        {isInterfaceSkill ? (
+          <select value={func} onChange={(e) => setFunc(e.target.value)}>
+            <option value="">全部接口</option>
+            {functionOptions.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        ) : null}
 
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
           <option value="">全部难度</option>
