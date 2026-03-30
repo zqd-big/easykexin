@@ -1,0 +1,11 @@
+﻿先双击 run.bat
+
+说明：
+- 能找到 Python + gcc + gdb：完整模式
+- 找到 Python 但没找到 gcc/gdb：基础模式
+- 连 Python 都没有：自动切到纯前端模式
+
+如果想在陌生电脑上也带上判题/调试能力，可把工具链放到：
+- portable\toolchain\python\python.exe
+- portable\toolchain\mingw64\bin\gcc.exe
+- portable\toolchain\mingw64\bin\gdb.exe

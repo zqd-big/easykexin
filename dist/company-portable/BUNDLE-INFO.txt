@@ -1,0 +1,5 @@
+﻿Micro Drills company bundle
+Built at: 2026-03-31 00:19:17
+Python source: C:\Users\ZQD\AppData\Local\Programs\Python\Python312
+MinGW source: D:\BaiduNetdiskDownload\mingw64
+Launch: run.bat
