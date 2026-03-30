@@ -1,7 +1,120 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { fetchQuestionById, fetchQuestions, submitResult } from "../api";
 import type { Question } from "../types";
+
+const INDENT = "    ";
+
+function lineStartAt(text: string, index: number): number {
+  return Math.max(0, text.lastIndexOf("\n", Math.max(0, index) - 1) + 1);
+}
+
+function lineEndAt(text: string, index: number): number {
+  const pos = text.indexOf("\n", index);
+  return pos === -1 ? text.length : pos;
+}
+
+function applyEditorValue(
+  textarea: HTMLTextAreaElement,
+  nextValue: string,
+  start: number,
+  end: number | null,
+  setCode: (value: string) => void
+): void {
+  textarea.value = nextValue;
+  textarea.selectionStart = start;
+  textarea.selectionEnd = end == null ? start : end;
+  setCode(nextValue);
+}
+
+function handleEditorKeyDown(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  setCode: (value: string) => void
+): void {
+  const textarea = event.currentTarget;
+  const value = textarea.value;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+
+  if (event.key === "Tab") {
+    event.preventDefault();
+
+    if (start === end) {
+      if (event.shiftKey) {
+        const lineStart = lineStartAt(value, start);
+        if (value.slice(lineStart, lineStart + INDENT.length) === INDENT) {
+          const nextValue = value.slice(0, lineStart) + value.slice(lineStart + INDENT.length);
+          const nextPos = Math.max(lineStart, start - INDENT.length);
+          applyEditorValue(textarea, nextValue, nextPos, null, setCode);
+        }
+        return;
+      }
+
+      const nextValue = value.slice(0, start) + INDENT + value.slice(end);
+      applyEditorValue(textarea, nextValue, start + INDENT.length, null, setCode);
+      return;
+    }
+
+    const blockStart = lineStartAt(value, start);
+    const blockEnd = lineEndAt(value, end);
+    const selected = value.slice(blockStart, blockEnd);
+    const lines = selected.split("\n");
+
+    if (event.shiftKey) {
+      const updated = lines.map((line) => {
+        if (line.startsWith(INDENT)) return line.slice(INDENT.length);
+        if (line.startsWith("\t")) return line.slice(1);
+        return line;
+      });
+      const removedFromFirst = lines[0].startsWith(INDENT) ? INDENT.length : lines[0].startsWith("\t") ? 1 : 0;
+      const nextBlock = updated.join("\n");
+      const nextValue = value.slice(0, blockStart) + nextBlock + value.slice(blockEnd);
+      const removedTotal = selected.length - nextBlock.length;
+      const nextStart = Math.max(blockStart, start - removedFromFirst);
+      const nextEnd = Math.max(nextStart, end - removedTotal);
+      applyEditorValue(textarea, nextValue, nextStart, nextEnd, setCode);
+      return;
+    }
+
+    const nextBlock = lines.map((line) => INDENT + line).join("\n");
+    const nextValue = value.slice(0, blockStart) + nextBlock + value.slice(blockEnd);
+    const nextStart = start + INDENT.length;
+    const nextEnd = end + INDENT.length * lines.length;
+    applyEditorValue(textarea, nextValue, nextStart, nextEnd, setCode);
+    return;
+  }
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const currentLine = before.slice(lineStartAt(value, start));
+    const indent = (currentLine.match(/^[ \t]*/) ?? [""])[0];
+    const trimmed = currentLine.trimEnd();
+    const nextChar = after[0] ?? "";
+    const extraIndent = /[\{\[\(]$/.test(trimmed) ? INDENT : "";
+    const closeAhead = /^[\}\]\)]/.test(after);
+
+    if (closeAhead && extraIndent) {
+      const insert = "\n" + indent + extraIndent + "\n" + indent;
+      const cursor = start + 1 + indent.length + extraIndent.length;
+      const nextValue = before + insert + after;
+      applyEditorValue(textarea, nextValue, cursor, null, setCode);
+      return;
+    }
+
+    if (nextChar && /^[\}\]\)]$/.test(nextChar) && indent.endsWith(INDENT)) {
+      const insert = "\n" + indent.slice(0, -INDENT.length);
+      const nextValue = before + insert + after;
+      applyEditorValue(textarea, nextValue, start + insert.length, null, setCode);
+      return;
+    }
+
+    const insert = "\n" + indent + extraIndent;
+    const nextValue = before + insert + after;
+    applyEditorValue(textarea, nextValue, start + insert.length, null, setCode);
+  }
+}
 
 export default function PracticePage() {
   const [sp] = useSearchParams();
@@ -159,7 +272,13 @@ export default function PracticePage() {
       </aside>
 
       <div className="panel">
-        <textarea value={code} onChange={(e) => setCode(e.target.value)} className="editor" spellCheck={false} />
+        <textarea
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => handleEditorKeyDown(e, setCode)}
+          className="editor"
+          spellCheck={false}
+        />
         <div className="row">
           <button onClick={() => setShowAnswer(true)}>查看答案</button>
           <button onClick={nextQuestion} disabled={idx + 1 >= questions.length}>

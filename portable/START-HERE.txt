@@ -1,0 +1,20 @@
+﻿Micro Drills 一键启动说明
+
+1. 推荐双击
+- 项目根目录: run.bat
+- 或 portable 目录: run.bat
+
+2. 启动器行为
+- 找到 Python + gcc + gdb: 完整模式（练题 + 一键判题 + 真单步调试）
+- 只找到 Python: 基础服务模式（练题可用，判题/调试受限）
+- 连 Python 都没有: 自动切到纯前端模式（练题可用）
+
+3. 如果要把工具链一起带走
+可以把可执行文件放到以下位置，启动器会自动识别：
+- portable\toolchain\python\python.exe
+- portable\toolchain\mingw64\bin\gcc.exe
+- portable\toolchain\mingw64\bin\gdb.exe
+
+4. 兼容入口
+- run-debug.bat: 优先走本地服务模式
+- run-portable.bat: 直接走纯前端模式

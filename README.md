@@ -28,6 +28,12 @@ npm run dev
 
 即可在浏览器打开离线版，不需要安装 Node.js / npm。
 
+## 3.2 真单步调试（免 Node）
+进入 `portable` 目录，直接双击：
+- `run-debug.bat`
+
+该模式会启动本地 Python 调试服务器，并调用本机 `gcc + gdb` 提供真单步调试。
+
 ## 4. 核心接口
 - `GET /api/meta`
 - `GET /api/questions`

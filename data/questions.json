@@ -131,7 +131,7 @@
     "expected_time_seconds": 45,
     "input_example": "[5,1,9,2]",
     "expected_output": "[1,2,5,9]",
-    "starter_code": "int cmp_int_asc(const void *a, const void *b) {\n    // TODO\n}\n\nqsort(arr, n, sizeof(arr[0]), cmp_int_asc);",
+    "starter_code": "int cmp_int_asc(const void *a, const void *b) {\n    // TODO\n    return 0;\n}",
     "answer_code": "int cmp_int_asc(const void *a, const void *b) {\n    int x = *(const int *)a;\n    int y = *(const int *)b;\n    return (x > y) - (x < y);\n}",
     "explanation": "使用三值比较避免 x-y 溢出风险。",
     "common_mistakes": [
@@ -293,7 +293,7 @@
     "expected_time_seconds": 70,
     "input_example": "root=[1,2,3,null,null,4,5]",
     "expected_output": "[1,2,3,4,5]",
-    "starter_code": "typedef struct Node {\n    int val;\n    struct Node *left, *right;\n} Node;\n\nvoid dfs(Node *root, int *out, int *idx) {\n    // TODO\n}",
+    "starter_code": "void dfs(Node *root, int *out, int *idx) {\n    // TODO\n    (void)root;\n    (void)out;\n    (void)idx;\n}",
     "answer_code": "void dfs(Node *root, int *out, int *idx) {\n    if (root == NULL) return;\n    out[(*idx)++] = root->val;\n    dfs(root->left, out, idx);\n    dfs(root->right, out, idx);\n}",
     "explanation": "递归边界先判断空节点。",
     "common_mistakes": [
@@ -645,7 +645,7 @@
     "expected_time_seconds": 50,
     "input_example": "arr=[5,1,4,2]",
     "expected_output": "[1,2,4,5]",
-    "starter_code": "int cmp(const void *a, const void *b) {\n    /* TODO */\n}\n\nqsort(arr, n, sizeof(arr[0]), cmp);",
+    "starter_code": "int cmp(const void *a, const void *b) {\n    /* TODO */\n    return 0;\n}",
     "answer_code": "int cmp(const void *a, const void *b) {\n    int x = *(const int *)a;\n    int y = *(const int *)b;\n    return (x > y) - (x < y);\n}",
     "explanation": "本题聚焦 qsort 的正确用法与边界处理。",
     "common_mistakes": [
@@ -723,7 +723,7 @@
     "expected_time_seconds": 50,
     "input_example": "src=\"hello\"",
     "expected_output": "dst=\"hello\"",
-    "starter_code": "char dst[16] = {0};\n/* TODO */",
+    "starter_code": "/* TODO: strcpy_s(dst, sizeof(dst), src); */",
     "answer_code": "errno_t rc = strcpy_s(dst, sizeof(dst), src);\nif (rc != 0) { /* handle */ }",
     "explanation": "本题聚焦 strcpy_s 的正确用法与边界处理。",
     "common_mistakes": [
@@ -749,7 +749,7 @@
     "expected_time_seconds": 50,
     "input_example": "src=\"network\", n=4",
     "expected_output": "dst=\"netw\"",
-    "starter_code": "char dst[16] = {0};\n/* TODO */",
+    "starter_code": "/* TODO: strncpy_s(dst, sizeof(dst), src, n); */",
     "answer_code": "strncpy_s(dst, sizeof(dst), src, n);",
     "explanation": "本题聚焦 strncpy_s 的正确用法与边界处理。",
     "common_mistakes": [
@@ -775,7 +775,7 @@
     "expected_time_seconds": 50,
     "input_example": "line=\"[INFO]a[ERROR]b\"",
     "expected_output": "返回首位置下标",
-    "starter_code": "int pos = -1;\n/* TODO */",
+    "starter_code": "/* TODO: p = strstr(line, \"b,c\"); */",
     "answer_code": "char *p = strstr(line, \"ERROR\");\nif (p) pos = (int)(p - line);",
     "explanation": "本题聚焦 strstr 的正确用法与边界处理。",
     "common_mistakes": [
@@ -801,7 +801,7 @@
     "expected_time_seconds": 50,
     "input_example": "s=\"a,b,c\"",
     "expected_output": "下标 1",
-    "starter_code": "char *p = NULL;\n/* TODO */",
+    "starter_code": "/* TODO: p = strchr(s, \",\"); */",
     "answer_code": "char *p = strchr(s, ',');",
     "explanation": "本题聚焦 strchr 的正确用法与边界处理。",
     "common_mistakes": [
@@ -827,7 +827,7 @@
     "expected_time_seconds": 50,
     "input_example": "s=\"/a/b/c.txt\"",
     "expected_output": "指向 \"/c.txt\"",
-    "starter_code": "char *p = NULL;\n/* TODO */",
+    "starter_code": "/* TODO: p = strrchr(s, \",\"); */",
     "answer_code": "char *p = strrchr(s, '/');",
     "explanation": "本题聚焦 strrchr 的正确用法与边界处理。",
     "common_mistakes": [
@@ -854,7 +854,7 @@
     "input_example": "line=\"10,20,30\"",
     "expected_output": "[\"10\",\"20\",\"30\"]",
     "starter_code": "char *ctx = NULL;\nchar *tok = strtok_s(line, \",\", &ctx);\nwhile (tok) {\n    /* TODO */\n    tok = strtok_s(NULL, \",\", &ctx);\n}",
-    "answer_code": "首次传原串，后续传 NULL，循环收集 token。",
+    "answer_code": "char *ctx = NULL;\nchar *tok = strtok_s(line, \",\", &ctx);\nint n = 0;\nwhile (tok != NULL && n < max_n) {\n    out[n++] = tok;\n    tok = strtok_s(NULL, \",\", &ctx);\n}\nreturn n;",
     "explanation": "本题聚焦 strtok_s 的正确用法与边界处理。",
     "common_mistakes": [
       "参数顺序写反",
@@ -879,7 +879,7 @@
     "expected_time_seconds": 50,
     "input_example": "dir=\"/tmp\", file=\"/a.log\"",
     "expected_output": "\"/tmp/a.log\"",
-    "starter_code": "char out[64] = {0};\n/* TODO */",
+    "starter_code": "/* TODO: strcpy_s(out, sizeof(out), dir); strcat_s(out, sizeof(out), file); */",
     "answer_code": "strcpy_s(out, sizeof(out), dir);\nstrcat_s(out, sizeof(out), file);",
     "explanation": "本题聚焦 strcat_s 的正确用法与边界处理。",
     "common_mistakes": [
@@ -1199,7 +1199,7 @@
     "input_example": "cap=4, push 1,2,3, pop",
     "expected_output": "pop=1",
     "starter_code": "int push(Q *q, int x) { /* TODO */ }\nint pop(Q *q, int *x) { /* TODO */ }",
-    "answer_code": "维护 head/tail/count，入队写 tail，出队读 head。",
+    "answer_code": "int push(Q *q, int x) {\n    if (q->count == q->cap) return -1;\n    q->data[q->tail] = x;\n    q->tail = (q->tail + 1) % q->cap;\n    q->count++;\n    return 0;\n}\n\nint pop(Q *q, int *x) {\n    if (q->count == 0) return -1;\n    *x = q->data[q->head];\n    q->head = (q->head + 1) % q->cap;\n    q->count--;\n    return 0;\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1225,7 +1225,7 @@
     "input_example": "s=\"([]){}\"",
     "expected_output": "true",
     "starter_code": "int valid(const char *s) { /* TODO */ }",
-    "answer_code": "左括号入栈，右括号匹配栈顶，最后栈空即合法。",
+    "answer_code": "int valid(const char *s) {\n    char st[256];\n    int top = 0;\n    for (int i = 0; s[i] != '\\0'; ++i) {\n        char c = s[i];\n        if (c == '(' || c == '[' || c == '{') {\n            st[top++] = c;\n            continue;\n        }\n        if (top == 0) return 0;\n        char t = st[--top];\n        if ((c == ')' && t != '(') || (c == ']' && t != '[') || (c == '}' && t != '{')) {\n            return 0;\n        }\n    }\n    return top == 0;\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1251,7 +1251,7 @@
     "input_example": "1->2->3",
     "expected_output": "3->2->1",
     "starter_code": "Node *reverse(Node *head) { /* TODO */ }",
-    "answer_code": "三指针 prev/cur/next 迭代反转。",
+    "answer_code": "Node *reverse(Node *head) {\n    Node *prev = NULL;\n    Node *cur = head;\n    while (cur != NULL) {\n        Node *next = cur->next;\n        cur->next = prev;\n        prev = cur;\n        cur = next;\n    }\n    return prev;\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1278,7 +1278,7 @@
     "input_example": "[4,1,4,2]",
     "expected_output": "4:2,1:1,2:1",
     "starter_code": "/* TODO: map[key]++ */",
-    "answer_code": "第一遍计数，第二遍按需求输出。",
+    "answer_code": "for (int i = 0; i < n; ++i) {\n    int v = arr[i];\n    freq[v] += 1;\n}\n\nfor (int i = 0; i < n; ++i) {\n    if (freq[arr[i]] == 1) {\n        return arr[i];\n    }\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1305,7 +1305,7 @@
     "input_example": "root=[1,2,3]",
     "expected_output": "[1,2,3]",
     "starter_code": "void dfs(Node *x) { /* TODO */ }",
-    "answer_code": "if(!x) return; visit(x); dfs(x->left); dfs(x->right);",
+    "answer_code": "void dfs(Node *x) {\n    if (x == NULL) return;\n    visit(x);\n    dfs(x->left);\n    dfs(x->right);\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1331,8 +1331,8 @@
     "expected_time_seconds": 100,
     "input_example": "n=4, edges=[[0,1],[1,2]], s=0,t=2",
     "expected_output": "true",
-    "starter_code": "int connected(...) { /* TODO */ }",
-    "answer_code": "邻接表 + 队列 + visited，首次到达 t 即返回 true。",
+    "starter_code": "int connected(int n, int start, int target) {\n    /* TODO */\n    (void)n;\n    (void)start;\n    (void)target;\n    return 0;\n}",
+    "answer_code": "int connected(int n, int start, int target) {\n    int q[1024];\n    int head = 0, tail = 0;\n    int vis[256] = {0};\n    q[tail++] = start;\n    vis[start] = 1;\n    while (head < tail) {\n        int cur = q[head++];\n        if (cur == target) return 1;\n        for (int i = 0; i < deg[cur]; ++i) {\n            int nxt = graph[cur][i];\n            if (vis[nxt]) continue;\n            vis[nxt] = 1;\n            q[tail++] = nxt;\n        }\n    }\n    return 0;\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1357,8 +1357,8 @@
     "expected_time_seconds": 90,
     "input_example": "a=[2,3,1,2,4,3], target=7",
     "expected_output": "2",
-    "starter_code": "int min_len(...) { /* TODO */ }",
-    "answer_code": "右指针扩张，满足后左指针收缩更新最优长度。",
+    "starter_code": "int min_len(int *a, int n, int target) {\n    /* TODO */\n    (void)a;\n    (void)n;\n    (void)target;\n    return 0;\n}",
+    "answer_code": "int min_len(int *a, int n, int target) {\n    int sum = 0, left = 0, ans = n + 1;\n    for (int right = 0; right < n; ++right) {\n        sum += a[right];\n        while (sum >= target) {\n            int len = right - left + 1;\n            if (len < ans) ans = len;\n            sum -= a[left++];\n        }\n    }\n    return ans == n + 1 ? 0 : ans;\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1384,7 +1384,7 @@
     "input_example": "[1,1,2,2,3]",
     "expected_output": "3",
     "starter_code": "int dedup(int *a, int n) { /* TODO */ }",
-    "answer_code": "fast 扫描，slow 写入新位置。",
+    "answer_code": "int dedup(int *a, int n) {\n    if (n == 0) return 0;\n    int slow = 1;\n    for (int fast = 1; fast < n; ++fast) {\n        if (a[fast] != a[fast - 1]) {\n            a[slow++] = a[fast];\n        }\n    }\n    return slow;\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1409,8 +1409,8 @@
     "expected_time_seconds": 60,
     "input_example": "a=[2,4,5,1], query=[1,3]",
     "expected_output": "10",
-    "starter_code": "void build(...){/*TODO*/}\nint sum(...){/*TODO*/}",
-    "answer_code": "pre[i+1]=pre[i]+a[i]，区间和=pre[r+1]-pre[l]。",
+    "starter_code": "void build(int *a, int n, int *pre) {\n    /* TODO */\n    (void)a;\n    (void)n;\n    (void)pre;\n}\n\nint sum(int *pre, int l, int r) {\n    /* TODO */\n    (void)pre;\n    (void)l;\n    (void)r;\n    return 0;\n}",
+    "answer_code": "void build_prefix(int *a, int n, int *pre) {\n    pre[0] = 0;\n    for (int i = 0; i < n; ++i) {\n        pre[i + 1] = pre[i] + a[i];\n    }\n}\n\nint range_sum(int *pre, int l, int r) {\n    return pre[r + 1] - pre[l];\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1436,7 +1436,7 @@
     "input_example": "n=5",
     "expected_output": "120",
     "starter_code": "long long f(int n) { /* TODO */ }",
-    "answer_code": "return n<=1 ? 1 : (long long)n * f(n-1);",
+    "answer_code": "long long f(int n) {\n    if (n <= 1) return 1;\n    return (long long)n * f(n - 1);\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1461,8 +1461,8 @@
     "expected_time_seconds": 110,
     "input_example": "[1,2,3]",
     "expected_output": "6 个排列",
-    "starter_code": "void dfs(...) { /* TODO: used[] + path */ }",
-    "answer_code": "做选择 -> 递归 -> 撤销选择。",
+    "starter_code": "void dfs(int *nums, int n, int idx) {\n    /* TODO: used[] + path */\n    (void)nums;\n    (void)n;\n    (void)idx;\n}",
+    "answer_code": "void dfs(int *nums, int n) {\n    if (path_size == n) {\n        record_path();\n        return;\n    }\n    for (int i = 0; i < n; ++i) {\n        if (used[i]) continue;\n        used[i] = 1;\n        path[path_size++] = nums[i];\n        dfs(nums, n);\n        path_size--;\n        used[i] = 0;\n    }\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1487,8 +1487,8 @@
     "expected_time_seconds": 130,
     "input_example": "[5,2,4,1]",
     "expected_output": "[1,2,4,5]",
-    "starter_code": "void merge_sort(...) { /* TODO */ }",
-    "answer_code": "递归分两半，merge 阶段双指针合并。",
+    "starter_code": "void merge_sort(int *a, int l, int r) {\n    /* TODO */\n    (void)a;\n    (void)l;\n    (void)r;\n}",
+    "answer_code": "void merge_sort(int *a, int l, int r, int *tmp) {\n    if (l >= r) return;\n    int m = l + (r - l) / 2;\n    merge_sort(a, l, m, tmp);\n    merge_sort(a, m + 1, r, tmp);\n    int i = l, j = m + 1, k = l;\n    while (i <= m && j <= r) {\n        tmp[k++] = a[i] <= a[j] ? a[i++] : a[j++];\n    }\n    while (i <= m) tmp[k++] = a[i++];\n    while (j <= r) tmp[k++] = a[j++];\n    for (int p = l; p <= r; ++p) a[p] = tmp[p];\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1513,8 +1513,8 @@
     "expected_time_seconds": 80,
     "input_example": "a=[1,2,4,4,9], target=4",
     "expected_output": "2",
-    "starter_code": "int lower_bound(...) { /* TODO */ }",
-    "answer_code": "[l,r) 模板：while(l<r){...}",
+    "starter_code": "int lower_bound(int *a, int n, int target) {\n    /* TODO */\n    (void)a;\n    (void)n;\n    (void)target;\n    return 0;\n}",
+    "answer_code": "int lower_bound(int *a, int n, int target) {\n    int l = 0, r = n;\n    while (l < r) {\n        int m = l + (r - l) / 2;\n        if (a[m] >= target) {\n            r = m;\n        } else {\n            l = m + 1;\n        }\n    }\n    return l;\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1539,8 +1539,8 @@
     "expected_time_seconds": 80,
     "input_example": "[(1,3),(2,4),(3,5),(0,6)]",
     "expected_output": "2",
-    "starter_code": "int solve(...) { /* TODO */ }",
-    "answer_code": "按结束时间升序排序，贪心选择可接上的区间。",
+    "starter_code": "int solve(int *a, int n) {\n    /* TODO */\n    (void)a;\n    (void)n;\n    return 0;\n}",
+    "answer_code": "int solve(Interval *a, int n) {\n    qsort(a, n, sizeof(a[0]), cmp_end_asc);\n    int ans = 0;\n    int last_end = -1;\n    for (int i = 0; i < n; ++i) {\n        if (a[i].start >= last_end) {\n            ans++;\n            last_end = a[i].end;\n        }\n    }\n    return ans;\n}",
     "explanation": "目标是在 1~3 分钟内回忆并写出可运行模板。",
     "common_mistakes": [
       "边界条件遗漏",
@@ -1565,7 +1565,7 @@
     "input_example": "arr=[3,1,2]",
     "expected_output": "vector 大小为 3",
     "starter_code": "VosVector *vec = VOS_VectorCreate(sizeof(int), NULL);\n/* TODO */",
-    "answer_code": "for (int i = 0; i < 3; ++i) VOS_VectorPushBack(vec, &arr[i]);",
+    "answer_code": "VosVector *vec = VOS_VectorCreate(sizeof(int), NULL);\nfor (int i = 0; i < n; ++i) {\n    VOS_VectorPushBack(vec, &arr[i]);\n}",
     "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
     "common_mistakes": [
       "传入悬挂指针",
@@ -1590,7 +1590,7 @@
     "input_example": "list=[1,2,3,4]",
     "expected_output": "list=[1,3]",
     "starter_code": "/* TODO: 删除时注意先缓存 next */",
-    "answer_code": "遍历时先取 next，再按条件删除当前节点。",
+    "answer_code": "VosListNode *node = VOS_ListFront(list);\nwhile (node != NULL) {\n    VosListNode *next = VOS_ListNext(node);\n    int *value = (int *)VOS_ListData(node);\n    if (value != NULL && (*value % 2) == 0) {\n        VOS_ListErase(list, node);\n    }\n    node = next;\n}",
     "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
     "common_mistakes": [
       "传入悬挂指针",
@@ -1615,7 +1615,7 @@
     "input_example": "key=\"latency\"",
     "expected_output": "map 中存在该 key",
     "starter_code": "/* TODO: get -> put */",
-    "answer_code": "int *p=(int*)VOS_MapGet(map,key); if(!p){int z=0; VOS_MapPut(map,key,&z);}",
+    "answer_code": "int *value = (int *)VOS_MapGet(map, key);\nif (value == NULL) {\n    int zero = 0;\n    VOS_MapPut(map, key, &zero);\n}",
     "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
     "common_mistakes": [
       "传入悬挂指针",
@@ -1640,7 +1640,7 @@
     "input_example": "A(left=64,vm=2,id=3), B(left=64,vm=1,id=8)",
     "expected_output": "B 优先",
     "starter_code": "int MachineCmp(const void *a, const void *b) { /* TODO */ }",
-    "answer_code": "if (a->left != b->left) return b->left - a->left;\nif (a->vm != b->vm) return a->vm - b->vm;\nreturn a->id - b->id;",
+    "answer_code": "int MachineCmp(const void *pa, const void *pb) {\n    const Machine *a = (const Machine *)pa;\n    const Machine *b = (const Machine *)pb;\n    if (a->left != b->left) return b->left - a->left;\n    if (a->vm != b->vm) return a->vm - b->vm;\n    return a->id - b->id;\n}",
     "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
     "common_mistakes": [
       "传入悬挂指针",
@@ -1665,7 +1665,7 @@
     "input_example": "arr=[4,2,4,3,2]",
     "expected_output": "[4,2,3]",
     "starter_code": "/* TODO: find + insert */",
-    "answer_code": "若 VOS_HashFind 为 NULL 则插入并写入结果。",
+    "answer_code": "int out_n = 0;\nfor (int i = 0; i < n; ++i) {\n    if (VOS_HashFind(hash, &arr[i]) == NULL) {\n        VOS_HashInsert(hash, &arr[i]);\n        out[out_n++] = arr[i];\n    }\n}",
     "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
     "common_mistakes": [
       "传入悬挂指针",
@@ -1690,7 +1690,7 @@
     "input_example": "vec=[7,2,5]",
     "expected_output": "[2,5,7]",
     "starter_code": "int cmp(const void *a,const void *b){/* TODO */}\n/* TODO: VOS_VectorSort */",
-    "answer_code": "cmp 返回三值比较；调用 VOS_VectorSort(vec, cmp)。",
+    "answer_code": "int cmp_int(const void *a, const void *b) {\n    int x = *(const int *)a;\n    int y = *(const int *)b;\n    return (x > y) - (x < y);\n}\n\nVOS_VectorSort(vec, cmp_int);",
     "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
     "common_mistakes": [
       "传入悬挂指针",
@@ -1715,7 +1715,7 @@
     "input_example": "[\"err\",\"warn\",\"err\"]",
     "expected_output": "err:2 warn:1",
     "starter_code": "/* TODO: get 后 +1 或 put 1 */",
-    "answer_code": "不存在写 1，存在取值 +1 后回写。",
+    "answer_code": "for (int i = 0; i < n; ++i) {\n    int *count = (int *)VOS_MapGet(map, words[i]);\n    if (count == NULL) {\n        int one = 1;\n        VOS_MapPut(map, words[i], &one);\n    } else {\n        int next = *count + 1;\n        VOS_MapPut(map, words[i], &next);\n    }\n}",
     "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
     "common_mistakes": [
       "传入悬挂指针",
@@ -1740,7 +1740,7 @@
     "input_example": "request=16",
     "expected_output": "返回分配机器 id 或 -1",
     "starter_code": "/* TODO: top -> check -> pop/push */",
-    "answer_code": "top 查看后满足条件则 pop，再 push 更新后的机器状态。",
+    "answer_code": "Machine *top = (Machine *)VOS_PriQueTop(pq);\nif (top == NULL || top->left < request) return -1;\n\nMachine next = *top;\nnext.left -= request;\nnext.vm += 1;\n\nVOS_PriQuePop(pq);\nVOS_PriQuePush(pq, (uintptr_t)&next);\nreturn next.id;",
     "explanation": "重点训练 VOS 容器接口调用顺序和内存生命周期。",
     "common_mistakes": [
       "传入悬挂指针",
@@ -2279,7 +2279,7 @@
     "input_example": "模板填空题",
     "expected_output": "三种模板都能正确终止",
     "starter_code": "// TODO: 补全每种模板的 while 条件和更新语句",
-    "answer_code": "[l,r): while(l<r)\n[l,r]: while(l<=r)\n(l,r]: while(l+1<r)\n并配套使用正确的 l/r 更新。",
+    "answer_code": "/* [l, r) */\nwhile (l < r) {\n    int m = l + (r - l) / 2;\n    if (ok(m)) r = m;\n    else l = m + 1;\n}\n\n/* [l, r] */\nwhile (l <= r) {\n    int m = l + (r - l) / 2;\n    if (ok(m)) { ans = m; r = m - 1; }\n    else l = m + 1;\n}\n\n/* (l, r] */\nwhile (l + 1 < r) {\n    int m = l + (r - l) / 2;\n    if (ok(m)) r = m;\n    else l = m;\n}",
     "explanation": "重点是维护区间不变量，而不是死记代码。",
     "common_mistakes": [
       "混用不同模板的更新规则",

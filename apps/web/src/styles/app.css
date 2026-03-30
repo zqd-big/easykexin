@@ -151,9 +151,23 @@ select {
   border-radius: 10px;
   border: 1px solid var(--line);
   background: #fbf8f1;
-  padding: 10px;
-  font-family: "Space Mono", "Consolas", monospace;
-  line-height: 1.5;
+  padding: 12px 14px;
+  font-family: "Cascadia Code", "Space Mono", "Consolas", monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  tab-size: 4;
+  resize: vertical;
+  color: var(--ink);
+  caret-color: var(--accent);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.editor:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 3px rgba(15, 118, 110, 0.12),
+    inset 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .row {
@@ -166,6 +180,47 @@ select {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px dashed var(--line);
+}
+
+.debug-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: #fffaf0;
+}
+
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.debug-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--accent-2);
+  background: #fff;
+  font-size: 0.9rem;
+}
+
+.debug-list {
+  margin: 10px 0;
+  padding-left: 20px;
+}
+
+.debug-editor {
+  width: 100%;
+  min-height: 220px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 10px;
+  font-family: "Space Mono", "Consolas", monospace;
+  line-height: 1.5;
 }
 
 .answer-block pre {

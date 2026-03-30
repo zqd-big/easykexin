@@ -1,3 +1,3 @@
 ﻿@echo off
 cd /d "%~dp0"
-call "%~dp0run.bat" lite
+call "%~dp0run.bat" debug
