@@ -20,8 +20,8 @@ from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parent
-HOST = "127.0.0.1"
-PORT = 19081
+HOST = os.environ.get("MICRO_DRILLS_HOST", "127.0.0.1")
+PORT = int(os.environ.get("MICRO_DRILLS_PORT", "19081"))
 SESSIONS = {}  # type: Dict[str, "DebugSession"]
 SESSIONS_LOCK = threading.Lock()
 
@@ -465,10 +465,12 @@ def resolve_tool(name):
         os.environ.get(env_key),
         str(ROOT / "toolchain" / "mingw64" / "bin" / f"{name}.exe"),
         str(ROOT.parent / "toolchain" / "mingw64" / "bin" / f"{name}.exe"),
-        shutil.which(name),
-        shutil.which(f"{name}.exe"),
+        str(ROOT / "toolchain" / "bin" / name),
+        str(ROOT.parent / "toolchain" / "bin" / name),
         str(ROOT / "toolchain" / "bin" / f"{name}.exe"),
         str(ROOT.parent / "toolchain" / "bin" / f"{name}.exe"),
+        shutil.which(name),
+        shutil.which(f"{name}.exe"),
         f"C:/mingw64/bin/{name}.exe",
         f"D:/mingw64/bin/{name}.exe",
         f"C:/msys64/mingw64/bin/{name}.exe",

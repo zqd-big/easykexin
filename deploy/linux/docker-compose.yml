@@ -1,0 +1,9 @@
+services:
+  micro-drills:
+    build:
+      context: ../..
+      dockerfile: deploy/linux/Dockerfile
+    container_name: micro-drills
+    ports:
+      - "19081:19081"
+    restart: unless-stopped

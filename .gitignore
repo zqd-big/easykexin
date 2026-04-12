@@ -3,4 +3,6 @@ apps/*/node_modules/
 apps/*/dist/
 apps/web/.vite/
 *.tsbuildinfo
-
+__pycache__/
+*.pyc
+dist/linux-deploy/
