@@ -208,16 +208,21 @@ window.INTERFACE_HINTS = {
   },
   vosvector: {
     name: "VosVector",
-    signature: "VosVector *VOS_VectorCreate(size_t itemSize, void (*freeFn)(void *)); / int VOS_VectorPushBack(VosVector *vec, const void *item); / void VOS_VectorSort(VosVector *vec, int (*cmp)(const void *, const void *));",
-    summary: "顺序容器，常用来存放一批同类型元素，并支持排序。",
+    signature: "VOS_VectorCreate(size_t itemSize); / VOS_VectorPushBack(VosVector *vector, const void *data); / VOS_VectorAt(const VosVector *vector, size_t index); / VOS_VectorSize(const VosVector *vector); / VOS_VectorErase(VosVector *vector, size_t index); / VOS_VectorSort(VosVector *vector, VosDataCmpFunc cmpFunc); / VOS_VectorSearch(const VosVector *vector, const void *data, VosDataCmpFunc cmpFunc); / VOS_VectorDestroy(VosVector *vector, VosFreeFunc freeFunc);",
+    summary: "顺序容器，元素按 itemSize 拷贝存储；真实头文件里 Vector 控制块是不透明结构，使用时不要访问内部字段。",
     params: [
-      { name: "itemSize", meaning: "元素字节数，通常是 sizeof(T)。" },
-      { name: "freeFn", meaning: "元素释放函数；存纯值时常传 NULL。" },
-      { name: "item", meaning: "要插入元素的地址，不是元素值本身。" }
+      { name: "itemSize", meaning: "单个元素的字节数，例如 sizeof(int)。" },
+      { name: "data", meaning: "待插入元素的地址，PushBack 会拷贝 data 指向的内容。" },
+      { name: "index", meaning: "元素下标，必须小于 VOS_VectorSize(vector)。" },
+      { name: "cmpFunc", meaning: "比较函数，形态类似 qsort；Sort 和 Search 要使用同一排序规则。" },
+      { name: "freeFunc", meaning: "Clear/Destroy 时释放元素内部资源；存纯值可传 NULL。" }
     ],
     notes: [
-      "PushBack 传的是元素地址。",
-      "Sort 的比较函数合同和 qsort 基本一致。"
+      "VOS_VectorCreate 只有一个参数，不是 VOS_VectorCreate(sizeof(T), NULL)。",
+      "VOS_VectorAt 返回元素地址，失败返回 NULL。",
+      "VOS_VectorErase 会让后续元素前移，不会留下空洞。",
+      "调用 VOS_VectorSearch 前必须先调用 VOS_VectorSort。",
+      "如果元素里保存指针，Destroy/Clear 时要传 freeFunc 释放元素内部资源。"
     ]
   },
   vosmap: {
@@ -247,18 +252,35 @@ window.INTERFACE_HINTS = {
       "题里常见模式：没找到就插入并写结果。"
     ]
   },
-  vosprique: {
-    name: "VosPriQue",
-    signature: "VosPriQue *VOS_PriQueCreate(int (*cmp)(const void *, const void *), void *freeFn); / int VOS_PriQuePush(VosPriQue *pq, uintptr_t item); / void *VOS_PriQueTop(VosPriQue *pq); / void VOS_PriQuePop(VosPriQue *pq);",
-    summary: "优先队列容器，常用于 TopK、调度、三重优先级排序。",
+  uthash: {
+    name: "uthash",
+    signature: "HASH_FIND_INT(head, &key, out); / HASH_ADD_INT(head, keyfield, item); / HASH_FIND_STR(head, key, out); / HASH_ADD_STR(head, keyfield, item); / HASH_DEL(head, item); / HASH_ITER(hh, head, cur, tmp)",
+    summary: "单头指针哈希表宏库。节点结构体里必须包含键字段和 UT_hash_handle hh；内存分配、释放由业务代码负责。",
     params: [
-      { name: "cmp", meaning: "比较函数，决定堆顶优先级。" },
-      { name: "item", meaning: "入队元素，很多题会存指针或 uintptr_t。" },
-      { name: "pq", meaning: "优先队列实例。" }
+      { name: "head", meaning: "哈希表头指针，通常初始化为 NULL；HASH_ADD/HASH_DEL 可能修改它。" },
+      { name: "keyfield", meaning: "节点结构体里的键字段名，不是变量值；例如 HASH_ADD_INT(map, ip, node)。" },
+      { name: "out", meaning: "查找结果指针变量；没找到时会被置为 NULL。" }
     ],
     notes: [
-      "先把比较规则写清楚：谁优先、返回方向是什么。",
-      "如果存指针，要确认被指向对象的生命周期足够长。"
+      "标准套路：先 HASH_FIND，没找到就 calloc 节点、写 key、HASH_ADD；找到了就更新业务字段。",
+      "HASH_DEL 只从表里摘除节点，不会自动 free。",
+      "边遍历边删除要用 HASH_ITER(hh, head, cur, tmp)。"
+    ]
+  },
+  vosprique: {
+    name: "VosPriQue",
+    signature: "VosPriQue *VOS_PriQueCreate(VosPriQueCmpFunc cmpFunc, VosDupFreeFuncPair *dataFunc); / uint32_t VOS_PriQuePush(VosPriQue *pq, uintptr_t value); / uint32_t VOS_PriQuePushBatch(VosPriQue *pq, void *begin, size_t num, size_t itemSize); / uintptr_t VOS_PriQueTop(const VosPriQue *pq); / void VOS_PriQuePop(VosPriQue *pq); / bool VOS_PriQueEmpty(const VosPriQue *pq); / size_t VOS_PriQueSize(const VosPriQue *pq);",
+    summary: "优先队列容器，常用于 TopK、调度、三重优先级排序。比较函数返回正数表示第一个参数优先；默认 VOS_IntCmpFunc/VOS_StrCmpFunc 是大顶堆方向。",
+    params: [
+      { name: "cmpFunc", meaning: "比较函数，入参是 uintptr_t；你要自己判断其中存的是值还是地址。" },
+      { name: "dataFunc", meaning: "可选的 dup/free 钩子；PushBatch 或短生命周期数据需要重点考虑。" },
+      { name: "value", meaning: "入队元素。小整数可直接存 uintptr_t，大对象通常存地址。" },
+      { name: "pq", meaning: "优先队列实例；通过接口访问，不要假设内部结构。" }
+    ],
+    notes: [
+      "Top 空队列时返回 0，使用前先调用 VOS_PriQueEmpty。",
+      "如果直接存整数，Top 返回值按整数转换；如果存地址，Top 返回值再转成目标指针。",
+      "Clear 删除成员但队列还能复用；Destroy 后句柄不能再用。"
     ]
   }
 };

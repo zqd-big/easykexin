@@ -46,6 +46,10 @@ PRELUDE = r"""
 
 typedef int errno_t;
 
+#if !defined(_MSC_VER)
+#define sscanf_s md_sscanf_s
+#endif
+
 static size_t md_strnlen(const char *src, size_t max_len) {
     size_t n = 0;
     if (src == NULL) return 0;
@@ -127,11 +131,19 @@ static int sprintf_s(char *dst, size_t cap, const char *fmt, ...) {
     return n;
 }
 
-static int sscanf_s(const char *buf, const char *fmt, ...) {
+static int md_sscanf_s(const char *buf, const char *fmt, ...) {
     int n;
     va_list ap;
     va_start(ap, fmt);
-    n = vsscanf(buf, fmt, ap);
+    if (strcmp(fmt, "%7s %c %d") == 0) {
+        char *word = va_arg(ap, char *);
+        (void)va_arg(ap, unsigned);
+        char *ch = va_arg(ap, char *);
+        int *value = va_arg(ap, int *);
+        n = sscanf(buf, "%7s %c %d", word, ch, value);
+    } else {
+        n = vsscanf(buf, fmt, ap);
+    }
     va_end(ap);
     return n;
 }
@@ -160,6 +172,25 @@ static char *strtok_s(char *str, const char *delim, char **context) {
 }
 #endif
 
+#if defined(__MINGW32__) && !defined(_MSC_VER)
+static int md_sscanf_s(const char *buf, const char *fmt, ...) {
+    int n;
+    va_list ap;
+    va_start(ap, fmt);
+    if (strcmp(fmt, "%7s %c %d") == 0) {
+        char *word = va_arg(ap, char *);
+        (void)va_arg(ap, unsigned);
+        char *ch = va_arg(ap, char *);
+        int *value = va_arg(ap, int *);
+        n = sscanf(buf, "%7s %c %d", word, ch, value);
+    } else {
+        n = vsscanf(buf, fmt, ap);
+    }
+    va_end(ap);
+    return n;
+}
+#endif
+
 typedef struct Node {
     int val;
     struct Node *left;
@@ -179,21 +210,161 @@ static void dupFree(void *ptr) {
     (void)ptr;
 }
 
+typedef void (*VosFreeFunc)(void *);
+typedef int (*VosDataCmpFunc)(const void *, const void *);
+typedef int32_t (*VosPriQueCmpFunc)(uintptr_t, uintptr_t);
+typedef void *(*VosDupFunc)(void *);
+
+typedef struct {
+    VosDupFunc dupFunc;
+    VosFreeFunc freeFunc;
+} VosDupFreeFuncPair;
+
+#ifndef VOS_OK
+#define VOS_OK 0U
+#endif
+#ifndef VOS_ERROR
+#define VOS_ERROR 1U
+#endif
+
+#define VOS_CONTAINER_OF(ptr, type, member) \
+    ((type *)((char *)(ptr) - (uintptr_t)(&((type *)0)->member)))
+
+static int32_t VOS_IntCmpFunc(uintptr_t data1, uintptr_t data2) {
+    if (data1 == data2) return 0;
+    return data1 < data2 ? 1 : -1;
+}
+
+static int32_t VOS_StrCmpFunc(uintptr_t addr1, uintptr_t addr2) {
+    return strcmp((const char *)addr1, (const char *)addr2);
+}
+
+typedef struct UT_hash_handle {
+    void *prev;
+    void *next;
+    const void *key;
+    unsigned keylen;
+} UT_hash_handle;
+
+#define HASH_FIND_INT(head, keyptr, out) do { \
+    (out) = NULL; \
+    __typeof__(head) _hf = (head); \
+    while (_hf != NULL) { \
+        if (_hf->key == *(keyptr)) { (out) = _hf; break; } \
+        _hf = (__typeof__(head))_hf->hh.next; \
+    } \
+} while (0)
+
+#define HASH_ADD_INT(head, keyfield, add) do { \
+    (add)->hh.key = &(add)->keyfield; \
+    (add)->hh.keylen = (unsigned)sizeof((add)->keyfield); \
+    (add)->hh.prev = NULL; \
+    (add)->hh.next = (head); \
+    if ((head) != NULL) (head)->hh.prev = (add); \
+    (head) = (add); \
+} while (0)
+
+#define HASH_FIND_STR(head, findstr, out) do { \
+    (out) = NULL; \
+    __typeof__(head) _hf = (head); \
+    while (_hf != NULL) { \
+        if (strcmp(_hf->key, (findstr)) == 0) { (out) = _hf; break; } \
+        _hf = (__typeof__(head))_hf->hh.next; \
+    } \
+} while (0)
+
+#define HASH_ADD_STR(head, keyfield, add) do { \
+    (add)->hh.key = (add)->keyfield; \
+    (add)->hh.keylen = (unsigned)strlen((add)->keyfield); \
+    (add)->hh.prev = NULL; \
+    (add)->hh.next = (head); \
+    if ((head) != NULL) (head)->hh.prev = (add); \
+    (head) = (add); \
+} while (0)
+
+#define HASH_FIND(hhname, head, keyptr, keylen_in, out) do { \
+    (out) = NULL; \
+    __typeof__(head) _hf = (head); \
+    unsigned _hk = (unsigned)(keylen_in); \
+    while (_hf != NULL) { \
+        if (_hf->hhname.keylen == _hk && memcmp(_hf->hhname.key, (keyptr), _hk) == 0) { (out) = _hf; break; } \
+        _hf = (__typeof__(head))_hf->hhname.next; \
+    } \
+} while (0)
+
+#define HASH_ADD(hhname, head, keyfield, keylen_in, add) do { \
+    (add)->hhname.key = &(add)->keyfield; \
+    (add)->hhname.keylen = (unsigned)(keylen_in); \
+    (add)->hhname.prev = NULL; \
+    (add)->hhname.next = (head); \
+    if ((head) != NULL) (head)->hhname.prev = (add); \
+    (head) = (add); \
+} while (0)
+
+#define HASH_DEL(head, delptr) do { \
+    if ((delptr)->hh.prev != NULL) ((__typeof__(head))((delptr)->hh.prev))->hh.next = (delptr)->hh.next; \
+    else (head) = (__typeof__(head))((delptr)->hh.next); \
+    if ((delptr)->hh.next != NULL) ((__typeof__(head))((delptr)->hh.next))->hh.prev = (delptr)->hh.prev; \
+    (delptr)->hh.prev = NULL; \
+    (delptr)->hh.next = NULL; \
+} while (0)
+
+#define HASH_ITER(hhname, head, el, tmp) \
+    for ((el) = (head); (el) != NULL && ((tmp) = (__typeof__(el))((el)->hhname.next), 1); (el) = (tmp))
+
+#define HASH_COUNT(head) ({ \
+    unsigned _hc = 0; \
+    __typeof__(head) _hcur = (head); \
+    while (_hcur != NULL) { ++_hc; _hcur = (__typeof__(head))_hcur->hh.next; } \
+    _hc; \
+})
+
+#define HASH_SORT(head, cmpf) do { \
+    if ((head) != NULL) { \
+        int _hs_swapped; \
+        do { \
+            _hs_swapped = 0; \
+            __typeof__(head) _hs_prev = NULL; \
+            __typeof__(head) _hs_cur = (head); \
+            while (_hs_cur != NULL && _hs_cur->hh.next != NULL) { \
+                __typeof__(head) _hs_next = (__typeof__(head))_hs_cur->hh.next; \
+                if ((cmpf)(_hs_cur, _hs_next) > 0) { \
+                    void *_hs_after = _hs_next->hh.next; \
+                    _hs_next->hh.prev = _hs_prev; \
+                    _hs_next->hh.next = _hs_cur; \
+                    _hs_cur->hh.prev = _hs_next; \
+                    _hs_cur->hh.next = _hs_after; \
+                    if (_hs_after != NULL) ((__typeof__(head))_hs_after)->hh.prev = _hs_cur; \
+                    if (_hs_prev != NULL) _hs_prev->hh.next = _hs_next; \
+                    else (head) = _hs_next; \
+                    _hs_prev = _hs_next; \
+                    _hs_swapped = 1; \
+                } else { \
+                    _hs_prev = _hs_cur; \
+                    _hs_cur = _hs_next; \
+                } \
+            } \
+        } while (_hs_swapped); \
+    } \
+} while (0)
+
 typedef struct VosVector {
     unsigned char *data;
     size_t item_size;
-    int size;
-    int cap;
-    void (*free_fn)(void *);
+    size_t size;
+    size_t cap;
+    uint32_t delta;
 } VosVector;
 
-static int md_vector_reserve(VosVector *vec, int need) {
+static int md_vector_reserve(VosVector *vec, size_t need) {
     unsigned char *next;
-    int cap;
+    size_t cap;
     if (vec == NULL) return -1;
     if (vec->cap >= need) return 0;
-    cap = vec->cap > 0 ? vec->cap : 8;
-    while (cap < need) cap *= 2;
+    cap = vec->cap > 0 ? vec->cap : 2;
+    while (cap < need) {
+        cap = vec->delta > 0 ? cap + vec->delta : cap * 2;
+    }
     next = (unsigned char *)realloc(vec->data, (size_t)cap * vec->item_size);
     if (next == NULL) return -1;
     vec->data = next;
@@ -201,27 +372,86 @@ static int md_vector_reserve(VosVector *vec, int need) {
     return 0;
 }
 
-static VosVector *VOS_VectorCreate(size_t item_size, void (*free_fn)(void *)) {
+static VosVector *VOS_VectorRawCreate(size_t item_size, size_t item_cap, uint32_t delta) {
     VosVector *vec = (VosVector *)calloc(1, sizeof(VosVector));
     if (vec == NULL) return NULL;
-    vec->item_size = item_size == 0 ? sizeof(int) : item_size;
-    vec->free_fn = free_fn;
+    if (item_size == 0) {
+        free(vec);
+        return NULL;
+    }
+    vec->item_size = item_size;
+    vec->cap = item_cap == 0 ? 2 : item_cap;
+    vec->delta = delta;
+    vec->data = (unsigned char *)calloc(vec->cap, vec->item_size);
+    if (vec->data == NULL) {
+        free(vec);
+        return NULL;
+    }
     return vec;
 }
 
-static int VOS_VectorPushBack(VosVector *vec, const void *item) {
+static VosVector *VOS_VectorCreate(size_t item_size) {
+    return VOS_VectorRawCreate(item_size, 2, 0);
+}
+
+static uint32_t VOS_VectorPushBack(VosVector *vec, const void *item) {
     unsigned char *slot;
-    if (vec == NULL || item == NULL) return -1;
-    if (md_vector_reserve(vec, vec->size + 1) != 0) return -1;
+    if (vec == NULL || item == NULL) return VOS_ERROR;
+    if (md_vector_reserve(vec, vec->size + 1) != 0) return VOS_ERROR;
     slot = vec->data + (size_t)vec->size * vec->item_size;
     memcpy(slot, item, vec->item_size);
     vec->size += 1;
-    return 0;
+    return VOS_OK;
 }
 
-static void VOS_VectorSort(VosVector *vec, int (*cmp)(const void *, const void *)) {
+static void *VOS_VectorAt(const VosVector *vec, size_t index) {
+    if (vec == NULL || index >= vec->size) return NULL;
+    return (void *)(vec->data + index * vec->item_size);
+}
+
+static size_t VOS_VectorSize(const VosVector *vec) {
+    return vec == NULL ? 0 : vec->size;
+}
+
+static uint32_t VOS_VectorErase(VosVector *vec, size_t index) {
+    unsigned char *pos;
+    if (vec == NULL || index >= vec->size) return VOS_ERROR;
+    pos = vec->data + index * vec->item_size;
+    if (index + 1 < vec->size) {
+        memmove(pos, pos + vec->item_size, (vec->size - index - 1) * vec->item_size);
+    }
+    vec->size -= 1;
+    return VOS_OK;
+}
+
+static void VOS_VectorClear(VosVector *vec, VosFreeFunc free_func) {
+    size_t i;
+    if (vec == NULL) return;
+    if (free_func != NULL) {
+        for (i = 0; i < vec->size; ++i) {
+            free_func(vec->data + i * vec->item_size);
+        }
+    }
+    free(vec->data);
+    vec->data = NULL;
+    vec->size = 0;
+    vec->cap = 0;
+}
+
+static void VOS_VectorSort(VosVector *vec, VosDataCmpFunc cmp) {
     if (vec == NULL || cmp == NULL || vec->size <= 1) return;
     qsort(vec->data, (size_t)vec->size, vec->item_size, cmp);
+}
+
+static void *VOS_VectorSearch(const VosVector *vec, const void *data, VosDataCmpFunc cmp) {
+    if (vec == NULL || data == NULL || cmp == NULL) return NULL;
+    return bsearch(data, vec->data, vec->size, vec->item_size, cmp);
+}
+
+static void VOS_VectorDestroy(VosVector *vec, VosFreeFunc free_func) {
+    if (vec == NULL) return;
+    VOS_VectorClear(vec, free_func);
+    free(vec);
 }
 
 typedef struct {
@@ -339,8 +569,8 @@ typedef struct VosPriQue {
     uintptr_t *data;
     int size;
     int cap;
-    int (*cmp)(const void *, const void *);
-    void (*free_fn)(void *);
+    VosPriQueCmpFunc cmp;
+    void *data_func;
 } VosPriQue;
 
 static int md_prique_reserve(VosPriQue *pq, int need) {
@@ -358,7 +588,7 @@ static int md_prique_reserve(VosPriQue *pq, int need) {
 }
 
 static int md_prique_before(VosPriQue *pq, uintptr_t a, uintptr_t b) {
-    if (pq != NULL && pq->cmp != NULL) return pq->cmp((const void *)a, (const void *)b) < 0;
+    if (pq != NULL && pq->cmp != NULL) return pq->cmp(a, b) < 0;
     return a < b;
 }
 
@@ -368,22 +598,28 @@ static void md_prique_swap(uintptr_t *a, uintptr_t *b) {
     *b = tmp;
 }
 
-static VosPriQue *VOS_PriQueCreate(int (*cmp)(const void *, const void *), void *free_fn) {
+static VosPriQue *md_VOS_PriQueCreate(VosPriQueCmpFunc cmp, void *data_func) {
     VosPriQue *pq = (VosPriQue *)calloc(1, sizeof(VosPriQue));
     if (pq == NULL) return NULL;
     pq->cmp = cmp;
-    pq->free_fn = (void (*)(void *))free_fn;
+    pq->data_func = data_func;
     return pq;
 }
 
-static int VOS_PriQueSize(VosPriQue *pq) {
+#define VOS_PriQueCreate(cmpFunc, dataFunc) md_VOS_PriQueCreate((VosPriQueCmpFunc)(cmpFunc), (void *)(dataFunc))
+
+static size_t VOS_PriQueSize(const VosPriQue *pq) {
     return pq == NULL ? 0 : pq->size;
 }
 
-static int VOS_PriQuePush(VosPriQue *pq, uintptr_t item) {
+static bool VOS_PriQueEmpty(const VosPriQue *pq) {
+    return pq == NULL || pq->size <= 0;
+}
+
+static uint32_t VOS_PriQuePush(VosPriQue *pq, uintptr_t item) {
     int idx;
-    if (pq == NULL) return -1;
-    if (md_prique_reserve(pq, pq->size + 1) != 0) return -1;
+    if (pq == NULL) return VOS_ERROR;
+    if (md_prique_reserve(pq, pq->size + 1) != 0) return VOS_ERROR;
     idx = pq->size++;
     pq->data[idx] = item;
     while (idx > 0) {
@@ -392,12 +628,34 @@ static int VOS_PriQuePush(VosPriQue *pq, uintptr_t item) {
         md_prique_swap(&pq->data[idx], &pq->data[parent]);
         idx = parent;
     }
-    return 0;
+    return VOS_OK;
 }
 
-static void *VOS_PriQueTop(VosPriQue *pq) {
-    if (pq == NULL || pq->size <= 0) return NULL;
-    return (void *)pq->data[0];
+static uint32_t VOS_PriQuePushBatch(VosPriQue *pq, void *beginItemAddr, size_t itemNum, size_t itemSize) {
+    size_t i;
+    VosDupFreeFuncPair *pair;
+    if (pq == NULL || beginItemAddr == NULL || itemSize == 0) return VOS_ERROR;
+    pair = (VosDupFreeFuncPair *)pq->data_func;
+    for (i = 0; i < itemNum; ++i) {
+        void *src = (char *)beginItemAddr + i * itemSize;
+        uintptr_t value;
+        if (pair != NULL && pair->dupFunc != NULL) {
+            value = (uintptr_t)pair->dupFunc(src);
+            if (value == (uintptr_t)NULL) return VOS_ERROR;
+        } else if (itemSize <= sizeof(uintptr_t)) {
+            value = 0;
+            memcpy(&value, src, itemSize);
+        } else {
+            value = (uintptr_t)src;
+        }
+        if (VOS_PriQuePush(pq, value) != VOS_OK) return VOS_ERROR;
+    }
+    return VOS_OK;
+}
+
+static uintptr_t VOS_PriQueTop(const VosPriQue *pq) {
+    if (pq == NULL || pq->size <= 0) return (uintptr_t)0;
+    return pq->data[0];
 }
 
 static void VOS_PriQuePop(VosPriQue *pq) {
@@ -417,6 +675,28 @@ static void VOS_PriQuePop(VosPriQue *pq) {
         md_prique_swap(&pq->data[idx], &pq->data[best]);
         idx = best;
     }
+}
+
+static void VOS_PriQueClear(VosPriQue *pq) {
+    int i;
+    VosDupFreeFuncPair *pair;
+    if (pq == NULL) return;
+    pair = (VosDupFreeFuncPair *)pq->data_func;
+    if (pair != NULL && pair->freeFunc != NULL) {
+        for (i = 0; i < pq->size; ++i) {
+            pair->freeFunc((void *)pq->data[i]);
+        }
+    }
+    free(pq->data);
+    pq->data = NULL;
+    pq->size = 0;
+    pq->cap = 0;
+}
+
+static void VOS_PriQueDestroy(VosPriQue *pq) {
+    if (pq == NULL) return;
+    VOS_PriQueClear(pq);
+    free(pq);
 }
 
 typedef struct VosListNode {

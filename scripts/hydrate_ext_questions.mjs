@@ -300,7 +300,7 @@ const vosDefs = {
     brief: "创建 VosVector 并 push [3,1,2]。",
     input: "arr=[3,1,2]",
     output: "vector 大小为 3",
-    starter: "VosVector *vec = VOS_VectorCreate(sizeof(int), NULL);\n/* TODO */",
+    starter: "VosVector *vec = VOS_VectorCreate(sizeof(int));\n/* TODO */",
     answer: "for (int i = 0; i < 3; ++i) VOS_VectorPushBack(vec, &arr[i]);"
   },
   ext_vos_voslist: {

@@ -168,7 +168,7 @@ int range_sum(int *pre, int l, int r) {
     }
     return ans;
 }`,
-  ext_vos_vosvector: `VosVector *vec = VOS_VectorCreate(sizeof(int), NULL);
+  ext_vos_vosvector: `VosVector *vec = VOS_VectorCreate(sizeof(int));
 for (int i = 0; i < n; ++i) {
     VOS_VectorPushBack(vec, &arr[i]);
 }`,

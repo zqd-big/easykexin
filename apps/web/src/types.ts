@@ -10,6 +10,11 @@ export interface Question {
   expected_time_seconds: number;
   input_example: string;
   expected_output: string;
+  function_contract?: {
+    summary?: string;
+    returns?: string;
+    params?: Array<{ name: string; description: string }>;
+  };
   starter_code: string;
   answer_code?: string;
   explanation?: string;

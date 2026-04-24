@@ -4,6 +4,49 @@ import { fetchQuestionById, fetchQuestions, submitResult } from "../api";
 import type { Question } from "../types";
 
 const INDENT = "    ";
+const COMPLETION_WORDS = [
+  "VOS_PriQueCreate",
+  "VOS_PriQuePush",
+  "VOS_PriQuePushBatch",
+  "VOS_PriQueTop",
+  "VOS_PriQuePop",
+  "VOS_PriQueEmpty",
+  "VOS_PriQueSize",
+  "VOS_PriQueClear",
+  "VOS_PriQueDestroy",
+  "VOS_IntCmpFunc",
+  "VosPriQue",
+  "VosDupFreeFuncPair",
+  "VOS_CONTAINER_OF",
+  "HASH_FIND_INT",
+  "HASH_ADD_INT",
+  "HASH_FIND_STR",
+  "HASH_ADD_STR",
+  "HASH_FIND",
+  "HASH_ADD",
+  "HASH_DEL",
+  "HASH_ITER",
+  "HASH_COUNT",
+  "HASH_SORT",
+  "UT_hash_handle",
+  "qsort",
+  "bsearch",
+  "sscanf_s",
+  "sprintf_s",
+  "strcpy_s",
+  "strncpy_s",
+  "strcat_s",
+  "strtok_s",
+  "strstr",
+  "strchr",
+  "strrchr",
+  "strtol",
+  "strtoll",
+  "strcmp",
+  "malloc",
+  "calloc",
+  "free"
+].sort();
 
 function lineStartAt(text: string, index: number): number {
   return Math.max(0, text.lastIndexOf("\n", Math.max(0, index) - 1) + 1);
@@ -27,6 +70,39 @@ function applyEditorValue(
   setCode(nextValue);
 }
 
+function commonPrefix(items: string[]): string {
+  if (items.length === 0) return "";
+  let prefix = items[0];
+  for (const item of items.slice(1)) {
+    let i = 0;
+    while (i < prefix.length && i < item.length && prefix[i] === item[i]) i += 1;
+    prefix = prefix.slice(0, i);
+    if (!prefix) break;
+  }
+  return prefix;
+}
+
+function applyInterfaceCompletion(textarea: HTMLTextAreaElement, setCode: (value: string) => void): boolean {
+  const value = textarea.value;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  if (start !== end) return false;
+
+  const match = value.slice(0, start).match(/[A-Za-z_][A-Za-z0-9_]*$/);
+  if (!match || match[0].length < 2) return false;
+
+  const prefix = match[0];
+  const matches = COMPLETION_WORDS.filter((item) => item.startsWith(prefix) && item !== prefix);
+  if (matches.length === 0) return false;
+
+  const shared = commonPrefix(matches);
+  const replacement = shared.length > prefix.length ? shared : matches[0];
+  const from = start - prefix.length;
+  const nextValue = value.slice(0, from) + replacement + value.slice(end);
+  applyEditorValue(textarea, nextValue, from + replacement.length, null, setCode);
+  return true;
+}
+
 function handleEditorKeyDown(
   event: KeyboardEvent<HTMLTextAreaElement>,
   setCode: (value: string) => void
@@ -40,6 +116,8 @@ function handleEditorKeyDown(
     event.preventDefault();
 
     if (start === end) {
+      if (!event.shiftKey && applyInterfaceCompletion(textarea, setCode)) return;
+
       if (event.shiftKey) {
         const lineStart = lineStartAt(value, start);
         if (value.slice(lineStart, lineStart + INDENT.length) === INDENT) {
@@ -241,6 +319,27 @@ export default function PracticePage() {
         {notice ? <p className="sub">{notice}</p> : null}
         <h2>{current.title}</h2>
         <p>{current.brief}</p>
+        {current.function_contract ? (
+          <div className="contract-box">
+            <h3>接口说明</h3>
+            {current.function_contract.summary ? <p>{current.function_contract.summary}</p> : null}
+            {current.function_contract.returns ? (
+              <p>
+                <strong>返回值：</strong>
+                {current.function_contract.returns}
+              </p>
+            ) : null}
+            {current.function_contract.params?.length ? (
+              <ul>
+                {current.function_contract.params.map((item) => (
+                  <li key={item.name}>
+                    <strong>{item.name}</strong>：{item.description}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
         <p>
           <strong>模式：</strong>
           {current.mode}

@@ -279,6 +279,70 @@
     return document.getElementById(id);
   }
 
+  const COMPLETION_WORDS = [
+    "VOS_PriQueCreate", "VOS_PriQuePush", "VOS_PriQuePushBatch", "VOS_PriQueTop", "VOS_PriQuePop",
+    "VOS_PriQueEmpty", "VOS_PriQueSize", "VOS_PriQueClear", "VOS_PriQueDestroy", "VOS_IntCmpFunc",
+    "VOS_StrCmpFunc", "VosPriQue", "VosPriQueCmpFunc", "VosDupFreeFuncPair", "VOS_CONTAINER_OF",
+    "VOS_VectorCreate", "VOS_VectorPushBack", "VOS_VectorAt", "VOS_VectorSize", "VOS_VectorErase",
+    "VOS_VectorSort", "VOS_VectorSearch", "VOS_VectorDestroy", "VOS_VectorClear",
+    "HASH_FIND_INT", "HASH_ADD_INT", "HASH_FIND_STR", "HASH_ADD_STR", "HASH_FIND", "HASH_ADD",
+    "HASH_DEL", "HASH_ITER", "HASH_COUNT", "HASH_SORT", "UT_hash_handle",
+    "qsort", "bsearch", "sscanf_s", "sprintf_s", "strcpy_s", "strncpy_s", "strcat_s", "strtok_s",
+    "strstr", "strchr", "strrchr", "strtol", "strtoll", "strcmp", "malloc", "calloc", "free"
+  ];
+
+  function completionWordsForQuestion(question) {
+    const words = new Set(COMPLETION_WORDS);
+    for (const item of question && question.related_functions ? question.related_functions : []) {
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(item)) words.add(item);
+      const key = normalizeHintKey(item);
+      const hint = key ? INTERFACE_HINTS[key] : null;
+      if (hint && hint.signature) {
+        const regex = /\b([A-Za-z_][A-Za-z0-9_]*)\s*(?=\()/g;
+        let match = regex.exec(hint.signature);
+        while (match) {
+          words.add(match[1]);
+          match = regex.exec(hint.signature);
+        }
+      }
+    }
+    return [...words].sort((a, b) => a.localeCompare(b));
+  }
+
+  function commonPrefix(items) {
+    if (items.length === 0) return "";
+    let prefix = items[0];
+    for (const item of items.slice(1)) {
+      let i = 0;
+      while (i < prefix.length && i < item.length && prefix[i] === item[i]) ++i;
+      prefix = prefix.slice(0, i);
+      if (!prefix) break;
+    }
+    return prefix;
+  }
+
+  function applyInterfaceCompletion(kind, textarea) {
+    const value = textarea.value;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    if (start !== end) return false;
+
+    const before = value.slice(0, start);
+    const match = before.match(/[A-Za-z_][A-Za-z0-9_]*$/);
+    if (!match || match[0].length < 2) return false;
+
+    const prefix = match[0];
+    const matches = completionWordsForQuestion(currentQuestion()).filter((item) => item.startsWith(prefix) && item !== prefix);
+    if (matches.length === 0) return false;
+
+    const shared = commonPrefix(matches);
+    const replacement = shared.length > prefix.length ? shared : matches[0];
+    const from = start - prefix.length;
+    const nextValue = value.slice(0, from) + replacement + value.slice(end);
+    applyEditorValue(kind, textarea, nextValue, from + replacement.length);
+    return true;
+  }
+
   function applyIndentToTextarea(kind, textarea, shiftKey) {
     const value = textarea.value;
     const start = textarea.selectionStart;
@@ -331,6 +395,7 @@
   function handleEditorIndent(event, kind) {
     if (event.key !== 'Tab') return false;
     event.preventDefault();
+    if (!event.shiftKey && applyInterfaceCompletion(kind, event.target)) return true;
     applyIndentToTextarea(kind, event.target, event.shiftKey);
     return true;
   }
@@ -400,7 +465,7 @@
   function editorToolbar(kind) {
     return `
       <div class="editor-toolbar">
-        <span class="editor-hint">编辑器增强已启用：Tab 缩进 / Shift+Tab 反缩进 / Enter 自动缩进</span>
+        <span class="editor-hint">编辑器增强已启用：Tab 接口补全/缩进 / Shift+Tab 反缩进 / Enter 自动缩进</span>
         <div class="row compact">
           <button type="button" onclick="AppActions.editorIndent('${kind}')">缩进</button>
           <button type="button" onclick="AppActions.editorOutdent('${kind}')">反缩进</button>
@@ -600,6 +665,12 @@
   function buildDriverTemplate(question, code) {
     if (!question) return 'return 0;';
     const source = String(code || question.starter_code || '');
+    const judgeSpec = buildJudgeSpec(question, source);
+    if (judgeSpec && judgeSpec.driverCode) return judgeSpec.driverCode;
+    if (typeof window.buildClassicJudgeSpec === "function") {
+      const spec = window.buildClassicJudgeSpec(question, source);
+      if (spec && spec.driverCode) return spec.driverCode;
+    }
     return looksLikeFunctionCode(source) ? buildFunctionDriver(question, source) : buildSnippetDriver(question, source);
   }
 
@@ -610,6 +681,7 @@
     if (raw.startsWith("vosmap")) return "vosmap";
     if (raw.startsWith("voshash")) return "voshash";
     if (raw.startsWith("vosprique")) return "vosprique";
+    if (raw === "uthash" || raw.startsWith("hash_") || raw === "ut_hash_handle") return "uthash";
     return raw.replace(/[^a-z0-9_]/g, "");
   }
 
@@ -665,9 +737,23 @@
     return text.trim();
   }
 
+  function snippetAfterTodo(source) {
+    const lines = String(source || "").split(/\r?\n/);
+    const idx = lines.findIndex((line) => line.includes("TODO"));
+    if (idx >= 0) {
+      const after = lines.slice(idx + 1).join("\n").trim();
+      if (after) return after;
+    }
+    return String(source || "").trim();
+  }
+
   function buildJudgeSpec(question, code) {
     if (!question) return null;
     const source = sanitizeJudgeSource(question, code || question.starter_code || "");
+    if (typeof window.buildClassicJudgeSpec === "function") {
+      const spec = window.buildClassicJudgeSpec(question, source);
+      if (spec && spec.driverCode) return spec;
+    }
     const funcs = question.related_functions || [];
     const fn = extractFunctionName(source) || extractFunctionName(question.starter_code || "");
     const questionId = question.id || "";
@@ -1455,8 +1541,8 @@
           '  int n = 3;',
           '  /*__USER_SNIPPET__*/',
           '  printf("[");',
-          '  for (int i = 0; i < vec->size; ++i) {',
-          '    int *p = (int *)(vec->data + (size_t)i * vec->item_size);',
+          '  for (size_t i = 0; i < VOS_VectorSize(vec); ++i) {',
+          '    int *p = (int *)VOS_VectorAt(vec, i);',
           '    printf(i ? ",%d" : "%d", *p);',
           '  }',
           '  printf("]\\n");',
@@ -1545,11 +1631,97 @@
           '  int arr[] = {3, 1, 2};',
           '  int n = 3;',
           '  /*__USER_SNIPPET__*/',
-          '  printf("size=%d\\n", vec->size);',
+          '  printf("size=%zu\\n", VOS_VectorSize(vec));',
           '  return 0;',
           '}'
         ].join("\n"),
         expectedOutput: "size=3"
+      };
+    }
+
+    if (questionId === "vos_vector_size_after_push") {
+      return {
+        driverCode: [
+          'int main(void) {',
+          '  int arr[] = {4, 8, 15};',
+          '  int n = 3;',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("size=%zu\\n", VOS_VectorSize(vec));',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "size=3"
+      };
+    }
+
+    if (questionId === "vos_vector_at_read_second") {
+      return {
+        driverCode: [
+          'int main(void) {',
+          '  int arr[] = {4, 8, 15};',
+          '  VosVector *vec = VOS_VectorCreate(sizeof(int));',
+          '  for (int i = 0; i < 3; ++i) VOS_VectorPushBack(vec, &arr[i]);',
+          '  /*__USER_SNIPPET__*/',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "8"
+      };
+    }
+
+    if (questionId === "vos_vector_erase_shift") {
+      return {
+        driverCode: [
+          'int main(void) {',
+          '  int arr[] = {3, 1, 2};',
+          '  VosVector *vec = VOS_VectorCreate(sizeof(int));',
+          '  for (int i = 0; i < 3; ++i) VOS_VectorPushBack(vec, &arr[i]);',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("[");',
+          '  for (size_t i = 0; i < VOS_VectorSize(vec); ++i) {',
+          '    int *p = (int *)VOS_VectorAt(vec, i);',
+          '    printf(i ? ",%d" : "%d", *p);',
+          '  }',
+          '  printf("]\\n");',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "[3,2]"
+      };
+    }
+
+    if (questionId === "vos_vector_sort_then_search") {
+      return {
+        driverCode: [
+          '/*__USER_GLOBAL__*/',
+          'int main(void) {',
+          '  int arr[] = {7, 2, 5};',
+          '  VosVector *vec = VOS_VectorCreate(sizeof(int));',
+          '  for (int i = 0; i < 3; ++i) VOS_VectorPushBack(vec, &arr[i]);',
+          '  printf(has_value(vec, 5) ? "found\\n" : "missing\\n");',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "found"
+      };
+    }
+
+    if (questionId === "vos_vector_destroy_freefunc") {
+      return {
+        driverCode: [
+          '/*__USER_GLOBAL__*/',
+          'int main(void) {',
+          '  VosVector *vec = VOS_VectorCreate(sizeof(char *));',
+          '  char *a = md_strdup("aa");',
+          '  char *b = md_strdup("bb");',
+          '  VOS_VectorPushBack(vec, &a);',
+          '  VOS_VectorPushBack(vec, &b);',
+          '  VOS_VectorDestroy(vec, free_string_item);',
+          '  printf("destroyed\\n");',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "destroyed"
       };
     }
 
@@ -1659,12 +1831,12 @@
           '/*__USER_GLOBAL__*/',
           'int main(void) {',
           '  int arr[] = {7, 2, 5};',
-          '  VosVector *vec = VOS_VectorCreate(sizeof(int), NULL);',
+          '  VosVector *vec = VOS_VectorCreate(sizeof(int));',
           '  for (int i = 0; i < 3; ++i) VOS_VectorPushBack(vec, &arr[i]);',
           `  VOS_VectorSort(vec, ${fn});`,
           '  printf("[");',
-          '  for (int i = 0; i < vec->size; ++i) {',
-          '    int *p = (int *)(vec->data + (size_t)i * vec->item_size);',
+          '  for (size_t i = 0; i < VOS_VectorSize(vec); ++i) {',
+          '    int *p = (int *)VOS_VectorAt(vec, i);',
           '    printf(i ? ",%d" : "%d", *p);',
           '  }',
           '  printf("]\\n");',
@@ -1704,6 +1876,486 @@
         ].join("\n"),
         expectedOutput: "8"
       };
+    }
+
+    if (questionId === "vos_prique_safe_top" && fn) {
+      return {
+        driverCode: [
+          'int32_t cmp_max_int_ptr(uintptr_t a, uintptr_t b) {',
+          '  int x = *(int *)a;',
+          '  int y = *(int *)b;',
+          '  if (x == y) return 0;',
+          '  return x < y ? 1 : -1;',
+          '}',
+          '/*__USER_GLOBAL__*/',
+          'int main(void) {',
+          '  VosPriQue *empty = VOS_PriQueCreate(cmp_max_int_ptr, NULL);',
+          '  VosPriQue *pq = VOS_PriQueCreate(cmp_max_int_ptr, NULL);',
+          '  int a = 7, b = 3;',
+          '  VOS_PriQuePush(pq, (uintptr_t)&a);',
+          '  VOS_PriQuePush(pq, (uintptr_t)&b);',
+          `  printf("%d\\n%d\\n", ${fn}(empty), ${fn}(pq));`,
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "-1\n7"
+      };
+    }
+
+    if (questionId === "vos_prique_cmp_min_int_ptr" && fn) {
+      return {
+        driverCode: [
+          '/*__USER_GLOBAL__*/',
+          'int main(void) {',
+          '  int small = 3;',
+          '  int large = 7;',
+          `  int r = ${fn}((uintptr_t)&small, (uintptr_t)&large);`,
+          '  printf(r > 0 ? "small-first\\n" : "wrong\\n");',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "small-first"
+      };
+    }
+
+    if (questionId === "vos_prique_pushbatch_int" && fn) {
+      return {
+        driverCode: [
+          'int32_t cmp_max_int_ptr(uintptr_t a, uintptr_t b) {',
+          '  int x = *(int *)a;',
+          '  int y = *(int *)b;',
+          '  if (x == y) return 0;',
+          '  return x < y ? 1 : -1;',
+          '}',
+          '/*__USER_GLOBAL__*/',
+          'int main(void) {',
+          '  int arr[] = {9, 1, 5};',
+          '  VosDupFreeFuncPair pair = {0};',
+          `  pair.dupFunc = ${fn};`,
+          '  pair.freeFunc = free;',
+          '  VosPriQue *pq = VOS_PriQueCreate(cmp_max_int_ptr, &pair);',
+          '  VOS_PriQuePushBatch(pq, arr, 3, sizeof(arr[0]));',
+          '  int *top = (int *)VOS_PriQueTop(pq);',
+          '  printf("size=%zu top=%d\\n", VOS_PriQueSize(pq), top ? *top : -1);',
+          '  VOS_PriQueDestroy(pq);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "size=3 top=9"
+      };
+    }
+
+    if (questionId === "vos_prique_clear_reuse") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'int32_t cmp_max_heap(uintptr_t a, uintptr_t b) {',
+          '  int x = *(int *)a;',
+          '  int y = *(int *)b;',
+          '  if (x == y) return 0;',
+          '  return x < y ? 1 : -1;',
+          '}',
+          'int main(void) {',
+          '  VosPriQue *pq = VOS_PriQueCreate(cmp_max_heap, NULL);',
+          '  int a = 7, b = 3, c = 4;',
+          '  VOS_PriQuePush(pq, (uintptr_t)&a);',
+          '  VOS_PriQuePush(pq, (uintptr_t)&b);',
+          '  /*__USER_SNIPPET__*/',
+          '  int *top = (int *)VOS_PriQueTop(pq);',
+          '  printf("%d\\n", top ? *top : -1);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "4"
+      };
+    }
+
+    if (questionId === "vos_container_of_owner") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'int main(void) {',
+          '  typedef struct { int id; int node; } Task;',
+          '  Task task = {7, 123};',
+          '  int *nodePtr = &task.node;',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("%d\\n", owner->id);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "7"
+      };
+    }
+
+    if (questionId === "vos_prique_direct_uintptr_int") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'int main(void) {',
+          '  VosPriQue *pq = VOS_PriQueCreate(VOS_IntCmpFunc, NULL);',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("top=%d\\n", topValue);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "top=9"
+      };
+    }
+
+    if (questionId === "vos_prique_pop_all_order" && fn) {
+      return {
+        driverCode: [
+          'int32_t cmp_max_int_ptr(uintptr_t a, uintptr_t b) {',
+          '  int x = *(int *)a;',
+          '  int y = *(int *)b;',
+          '  if (x == y) return 0;',
+          '  return x < y ? 1 : -1;',
+          '}',
+          '/*__USER_GLOBAL__*/',
+          'int main(void) {',
+          '  int arr[] = {7, 3, 9};',
+          '  VosPriQue *pq = VOS_PriQueCreate(cmp_max_int_ptr, NULL);',
+          '  for (int i = 0; i < 3; ++i) VOS_PriQuePush(pq, (uintptr_t)&arr[i]);',
+          '  int out[8] = {0};',
+          `  int n = ${fn}(pq, out);`,
+          '  printf("[");',
+          '  for (int i = 0; i < n; ++i) printf(i ? ",%d" : "%d", out[i]);',
+          '  printf("]\\n");',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "[9,7,3]"
+      };
+    }
+
+    if (questionId === "vos_prique_dup_free_pair") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'void *dup_int_item(void *ptr) {',
+          '  int *copy = (int *)malloc(sizeof(int));',
+          '  if (copy == NULL) return NULL;',
+          '  *copy = *(int *)ptr;',
+          '  return copy;',
+          '}',
+          'int32_t cmp_min_int_ptr(uintptr_t data1, uintptr_t data2) {',
+          '  int a = *(int *)data1;',
+          '  int b = *(int *)data2;',
+          '  if (a == b) return 0;',
+          '  return a < b ? 1 : -1;',
+          '}',
+          'int main(void) {',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("%s\\n", pq != NULL ? "ok" : "fail");',
+          '  VOS_PriQueDestroy(pq);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "ok"
+      };
+    }
+
+    if (questionId === "uthash_int_count_freq") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct IntNode { int key; int cnt; UT_hash_handle hh; } IntNode;',
+          'int main(void) {',
+          '  int arr[] = {4, 2, 4, 3};',
+          '  int n = 4;',
+          '  IntNode *map = NULL;',
+          '  /*__USER_SNIPPET__*/',
+          '  IntNode *a = NULL;',
+          '  IntNode *b = NULL;',
+          '  int k4 = 4, k2 = 2;',
+          '  HASH_FIND_INT(map, &k4, a);',
+          '  HASH_FIND_INT(map, &k2, b);',
+          '  printf("4:%d 2:%d\\n", a ? a->cnt : -1, b ? b->cnt : -1);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "4:2 2:1"
+      };
+    }
+
+    if (questionId === "uthash_int_dedup_order") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct IntNode { int key; UT_hash_handle hh; } IntNode;',
+          'int main(void) {',
+          '  int arr[] = {4, 2, 4, 3, 2};',
+          '  int n = 5;',
+          '  IntNode *seen = NULL;',
+          '  int out[16] = {0};',
+          '  int out_n = 0;',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("[");',
+          '  for (int i = 0; i < out_n; ++i) printf(i ? ",%d" : "%d", out[i]);',
+          '  printf("]\\n");',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "[4,2,3]"
+      };
+    }
+
+    if (questionId === "uthash_str_count_freq") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct WordNode { char key[16]; int cnt; UT_hash_handle hh; } WordNode;',
+          'int main(void) {',
+          '  const char *words[] = {"err", "warn", "err"};',
+          '  int n = 3;',
+          '  WordNode *map = NULL;',
+          '  /*__USER_SNIPPET__*/',
+          '  WordNode *err = NULL;',
+          '  WordNode *warn = NULL;',
+          '  HASH_FIND_STR(map, "err", err);',
+          '  HASH_FIND_STR(map, "warn", warn);',
+          '  printf("err:%d warn:%d\\n", err ? err->cnt : -1, warn ? warn->cnt : -1);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "err:2 warn:1"
+      };
+    }
+
+    if (questionId === "uthash_delete_int_key") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct IntNode { int key; UT_hash_handle hh; } IntNode;',
+          'int main(void) {',
+          '  IntNode *set = NULL;',
+          '  for (int i = 1; i <= 3; ++i) {',
+          '    IntNode *node = (IntNode *)calloc(1, sizeof(IntNode));',
+          '    node->key = i;',
+          '    HASH_ADD_INT(set, key, node);',
+          '  }',
+          '  /*__USER_SNIPPET__*/',
+          '  IntNode *found = NULL;',
+          '  int key = 2;',
+          '  HASH_FIND_INT(set, &key, found);',
+          '  printf("count=%u has2=%d\\n", HASH_COUNT(set), found != NULL);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "count=2 has2=0"
+      };
+    }
+
+    if (questionId === "uthash_iter_sum_values") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct IntNode { int key; int cnt; UT_hash_handle hh; } IntNode;',
+          'int main(void) {',
+          '  IntNode *head = NULL;',
+          '  int vals[][2] = {{1,4},{2,1},{3,3}};',
+          '  for (int i = 0; i < 3; ++i) {',
+          '    IntNode *node = (IntNode *)calloc(1, sizeof(IntNode));',
+          '    node->key = vals[i][0]; node->cnt = vals[i][1];',
+          '    HASH_ADD_INT(head, key, node);',
+          '  }',
+          '  int sum = 0;',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("%d\\n", sum);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "8"
+      };
+    }
+
+    if (questionId === "uthash_ip_overwrite_mac" || questionId === "exam_arp_upsert_mac") {
+      const typeName = questionId === "exam_arp_upsert_mac" ? "ArpNode" : "MacNode";
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          `typedef struct ${typeName} { int ip; char mac[18]; int lastHit; UT_hash_handle hh; } ${typeName};`,
+          'int main(void) {',
+          `  ${typeName} *table = NULL;`,
+          `  ${typeName} *old = (${typeName} *)calloc(1, sizeof(${typeName}));`,
+          '  old->ip = 123;',
+          '  strcpy_s(old->mac, sizeof(old->mac), "AB-AB-AB-AB-AB-AB");',
+          '  HASH_ADD_INT(table, ip, old);',
+          '  /*__USER_SNIPPET__*/',
+          `  ${typeName} *node = NULL;`,
+          '  int key = 123;',
+          '  HASH_FIND_INT(table, &key, node);',
+          '  printf("%s\\n", node ? node->mac : "missing");',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "CD-EF-AB-AA-AB-AB"
+      };
+    }
+
+    if (questionId === "uthash_count_size") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct IntNode { int key; UT_hash_handle hh; } IntNode;',
+          'int main(void) {',
+          '  IntNode *table = NULL;',
+          '  for (int i = 1; i <= 3; ++i) {',
+          '    IntNode *node = (IntNode *)calloc(1, sizeof(IntNode));',
+          '    node->key = i;',
+          '    HASH_ADD_INT(table, key, node);',
+          '  }',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("%u\\n", count);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "3"
+      };
+    }
+
+    if (questionId === "uthash_delete_all_iter") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct IntNode { int key; UT_hash_handle hh; } IntNode;',
+          'int main(void) {',
+          '  IntNode *map = NULL;',
+          '  for (int i = 1; i <= 3; ++i) {',
+          '    IntNode *node = (IntNode *)calloc(1, sizeof(IntNode));',
+          '    node->key = i;',
+          '    HASH_ADD_INT(map, key, node);',
+          '  }',
+          '  /*__USER_SNIPPET__*/',
+          '  printf("count=%u\\n", HASH_COUNT(map));',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "count=0"
+      };
+    }
+
+    if (questionId === "uthash_composite_pair_key") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct { int src; int dst; } PairKey;',
+          'typedef struct EdgeNode { PairKey key; int weight; UT_hash_handle hh; } EdgeNode;',
+          'int main(void) {',
+          '  EdgeNode *edges = NULL;',
+          '  int src = 1, dst = 3, w = 7;',
+          '  /*__USER_SNIPPET__*/',
+          '  PairKey findKey = {0};',
+          '  findKey.src = 1; findKey.dst = 3;',
+          '  EdgeNode *found = NULL;',
+          '  HASH_FIND(hh, edges, &findKey, sizeof(findKey), found);',
+          '  printf("weight=%d\\n", found ? found->weight : -1);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "weight=7"
+      };
+    }
+
+    if (questionId === "uthash_sort_cnt_desc") {
+      const cleanSortCode = source.replace(/^\s*HASH_SORT\s*\(\s*map\s*,\s*cmp_cnt_desc\s*\)\s*;\s*$/m, "").trim();
+      return {
+        code: [
+          'typedef struct IntNode { int key; int cnt; UT_hash_handle hh; } IntNode;',
+          cleanSortCode
+        ].join("\n"),
+        driverCode: [
+          '/*__USER_GLOBAL__*/',
+          'int main(void) {',
+          '  IntNode *map = NULL;',
+          '  int vals[][2] = {{4,2},{2,5},{9,1}};',
+          '  for (int i = 0; i < 3; ++i) {',
+          '    IntNode *node = (IntNode *)calloc(1, sizeof(IntNode));',
+          '    node->key = vals[i][0]; node->cnt = vals[i][1];',
+          '    HASH_ADD_INT(map, key, node);',
+          '  }',
+          '  HASH_SORT(map, cmp_cnt_desc);',
+          '  printf("%d:%d first\\n", map->key, map->cnt);',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "2:5 first"
+      };
+    }
+
+    if (questionId === "uthash_per_ip_pkt_cache") {
+      return {
+        code: snippetAfterTodo(source),
+        driverCode: [
+          'typedef struct CacheNode { int ip; int pktIds[100]; int cnt; UT_hash_handle hh; } CacheNode;',
+          'int main(void) {',
+          '  CacheNode *cache = NULL;',
+          '  CacheNode *old = (CacheNode *)calloc(1, sizeof(CacheNode));',
+          '  old->ip = 456; old->pktIds[0] = 0; old->pktIds[1] = 23; old->cnt = 2;',
+          '  HASH_ADD_INT(cache, ip, old);',
+          '  int ip = 456;',
+          '  int pktId = 8;',
+          '  /*__USER_SNIPPET__*/',
+          '  CacheNode *node = NULL;',
+          '  HASH_FIND_INT(cache, &ip, node);',
+          '  printf("[");',
+          '  for (int i = 0; node && i < node->cnt; ++i) printf(i ? ",%d" : "%d", node->pktIds[i]);',
+          '  printf("]\\n");',
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "[0,8,23]"
+      };
+    }
+
+    if (questionId === "exam_calc_stack_idx" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', `  printf("%d\\n%d\\n", ${fn}('a'), ${fn}('t'));`, '  return 0;', '}'].join("\n"), expectedOutput: "0\n19" };
+    }
+    if (questionId === "exam_calc_parse_psh" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', '  char name = 0; int value = 0;', `  int ok = ${fn}("PSH a 8", &name, &value);`, '  printf("ok=%d name=%c value=%d\\n", ok, name, value);', '  return 0;', '}'].join("\n"), expectedOutput: "ok=1 name=a value=8" };
+    }
+    if (questionId === "exam_calc_push_if_room" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', '  int stacks[20][32] = {{0}}; int top[20] = {0}; top[0] = 31;', `  int ok1 = ${fn}(stacks, top, 0, 8);`, '  int top1 = top[0];', `  int ok2 = ${fn}(stacks, top, 0, 9);`, '  printf("%d %d\\n%d %d\\n", ok1, top1, ok2, top[0]);', '  return 0;', '}'].join("\n"), expectedOutput: "1 32\n0 32" };
+    }
+    if (questionId === "exam_calc_norm_1024" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', `  printf("%d\\n%d\\n", ${fn}(11), ${fn}(1025));`, '  return 0;', '}'].join("\n"), expectedOutput: "11\n1" };
+    }
+    if (questionId === "exam_calc_div_pair" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', '  int lhs = 11, rhs = 3;', `  ${fn}(&lhs, &rhs);`, '  printf("%d,%d\\n", lhs, rhs);', '  return 0;', '}'].join("\n"), expectedOutput: "3,2" };
+    }
+    if (questionId === "exam_calc_collect_tops" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', '  int stacks[20][32] = {{0}}; int top[20] = {0}; int out[20] = {0};', '  stacks[0][0] = 3; top[0] = 1; stacks[3][0] = 6; top[3] = 1;', `  ${fn}(stacks, top, out);`, '  printf("%d,%d,%d,%d\\n", out[0], out[1], out[2], out[3]);', '  return 0;', '}'].join("\n"), expectedOutput: "3,-1,-1,6" };
+    }
+
+    if (questionId === "exam_arp_hash_find_ip" && fn) {
+      return {
+        driverCode: [
+          'typedef struct ArpNode { int ip; char mac[18]; int lastHit; UT_hash_handle hh; } ArpNode;',
+          '/*__USER_GLOBAL__*/',
+          'int main(void) {',
+          '  ArpNode *table = NULL;',
+          '  ArpNode *node = (ArpNode *)calloc(1, sizeof(ArpNode));',
+          '  node->ip = 123; strcpy_s(node->mac, sizeof(node->mac), "AB");',
+          '  HASH_ADD_INT(table, ip, node);',
+          `  printf("%s\\n", ${fn}(table, 123) != NULL ? "found" : "missing");`,
+          `  printf("%s\\n", ${fn}(table, 456) != NULL ? "found" : "missing");`,
+          '  return 0;',
+          '}'
+        ].join("\n"),
+        expectedOutput: "found\nmissing"
+      };
+    }
+    if (questionId === "exam_arp_choose_lru" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', '  int used[] = {1,0,1}; int lastHit[] = {10,0,3};', `  printf("%d\\n", ${fn}(used, lastHit, 3));`, '  return 0;', '}'].join("\n"), expectedOutput: "2" };
+    }
+    if (questionId === "exam_arp_can_cache_pkt" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', `  printf("%d\\n%d\\n%d\\n", ${fn}(2,3,1,2), ${fn}(3,3,1,2), ${fn}(2,3,2,2));`, '  return 0;', '}'].join("\n"), expectedOutput: "1\n0\n0" };
+    }
+    if (questionId === "exam_arp_insert_pkt_sorted" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', '  int pktIds[8] = {0,23}; int n = 2;', `  ${fn}(pktIds, &n, 8);`, '  printf("[");', '  for (int i = 0; i < n; ++i) printf(i ? ",%d" : "%d", pktIds[i]);', '  printf("]\\n");', '  return 0;', '}'].join("\n"), expectedOutput: "[0,8,23]" };
+    }
+    if (questionId === "exam_arp_flush_pkt_ids" && fn) {
+      return { driverCode: ['/*__USER_GLOBAL__*/', 'int main(void) {', '  int pktIds[8] = {0,8,23}; int n = 3; int out[8] = {0};', `  int k = ${fn}(pktIds, &n, out);`, '  printf("k=%d out=[", k);', '  for (int i = 0; i < k; ++i) printf(i ? ",%d" : "%d", out[i]);', '  printf("] remain=%d\\n", n);', '  return 0;', '}'].join("\n"), expectedOutput: "k=3 out=[0,8,23] remain=0" };
     }
 
     return null;
@@ -1809,6 +2461,25 @@
             : ""
         }
       </section>
+    `;
+  }
+
+  function renderFunctionContract(question) {
+    const contract = question && question.function_contract;
+    if (!contract) return "";
+    const params = Array.isArray(contract.params) ? contract.params : [];
+    const paramList = params.length
+      ? `<ul>${params.map((item) => `<li><strong>${esc(item.name || "")}</strong>：${esc(item.description || "")}</li>`).join("")}</ul>`
+      : "";
+    const summary = contract.summary ? `<p>${esc(contract.summary)}</p>` : "";
+    const returns = contract.returns ? `<p><strong>返回值：</strong>${esc(contract.returns)}</p>` : "";
+    return `
+      <div class="contract-box">
+        <h3>接口说明</h3>
+        ${summary}
+        ${returns}
+        ${paramList}
+      </div>
     `;
   }
 
@@ -2165,6 +2836,7 @@
     const notice = app.practice.notice ? `<p class="sub">${esc(app.practice.notice)}</p>` : "";
     const interfaceHints = getInterfaceHints(question);
     const helperPanel = app.practice.showHintPanel ? renderInterfaceHints(interfaceHints) : "";
+    const functionContract = renderFunctionContract(question);
     const judgePanel = renderJudgeResult();
     const submissionHistory = renderSubmissionHistory(question);
     const answer = app.practice.showAnswer
@@ -2196,6 +2868,7 @@
           ${notice}
           <h2>${esc(question.title)}</h2>
           <p>${esc(question.brief)}</p>
+          ${functionContract}
           <p><strong>模式：</strong>${esc(question.mode)}</p>
           <p><strong>难度：</strong>${esc(question.difficulty)}</p>
           <p><strong>预计耗时：</strong>${esc(question.expected_time_seconds)}s</p>
@@ -2612,9 +3285,10 @@
       app.practice.judgeResult = null;
       render();
       try {
+        const runCode = spec.code || app.practice.code;
         const data = await apiPost("/api/judge", {
           question_id: question.id,
-          code: app.practice.code,
+          code: runCode,
           driver_code: spec.driverCode,
           expected_output: spec.expectedOutput
         });
@@ -2637,7 +3311,9 @@
     async debugStart() {
       const question = currentQuestion();
       if (!question) return;
-      const freshDriver = buildDriverTemplate(question, app.practice.code || question.starter_code || "");
+      const spec = buildJudgeSpec(question, app.practice.code || question.starter_code || "");
+      const runCode = (spec && spec.code) || app.practice.code;
+      const freshDriver = (spec && spec.driverCode) || buildDriverTemplate(question, app.practice.code || question.starter_code || "");
       if (needsDriverRefresh(app.practice.driverCode)) {
         app.practice.driverCode = freshDriver;
         saveDriverCode(question.id, app.practice.driverCode);
@@ -2659,7 +3335,7 @@
       try {
         const data = await apiPost("/api/debug/start", {
           question_id: question.id,
-          code: app.practice.code,
+          code: runCode,
           driver_code: app.practice.driverCode || freshDriver
         });
         app.practice.debugSessionId = data.session_id || "";

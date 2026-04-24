@@ -71,6 +71,28 @@ body {
   color: var(--sub);
 }
 
+.contract-box {
+  border: 1px solid #c9ded9;
+  background: #f1faf7;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+.contract-box h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.contract-box p {
+  margin: 6px 0;
+}
+
+.contract-box ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
